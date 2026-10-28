@@ -1632,11 +1632,13 @@ async function demarrer() {
   // après la visite : la lettre, lue en défilant lentement, jusqu'à la fermeture des rideaux
   async function versLaFin() {
     const yL = $("#s-lettre").offsetTop, yC = $("#s-cinema").offsetTop;
-    aller(yL); await attendre(2500);
+    // attendre l'arrivée réelle : aller() dure 3 à 4,6 s selon la distance
+    await new Promise((r) => { aller(yL, { onComplete: r }); setTimeout(r, lenis ? 5200 : 1500); });
+    await attendre(1200);
     if (auto.on || Math.abs(position() - yL) > 40) return;
     // défilement lent jusqu'à ce que la fin de la lettre (signature) soit entièrement à l'écran
-    const lettre = $(".lettre"), sign = $(".lettre .sign");
-    const yFin = Math.max(yL, position() + lettre.getBoundingClientRect().bottom - innerHeight + 24);
+    const lettre = $(".lettre"), sign = $(".lettre .sign"), max = lenis ? lenis.limit : document.documentElement.scrollHeight - innerHeight;
+    const yFin = Math.min(max, Math.max(yL, position() + lettre.getBoundingClientRect().bottom - innerHeight + 24));
     const lecture = clamp(lettre.textContent.trim().split(/\s+/).length / 7.8, 6, 27);
     if (lenis) lenis.scrollTo(yFin, { duration: lecture, easing: (t) => (1 - Math.cos(Math.PI * t)) / 2 });
     else { await attendre(lecture * 1000 * .5); aller(yFin); }
@@ -1788,7 +1790,7 @@ async function demarrer() {
     image(s, t) { rendu(s, t, false); renderer.render(scene, cam); return renderer.domElement; },
     rendre() { dimensionner(true); }
   };
-  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat, ruban: () => ({ ...ruban }) };
+  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat, ruban: () => ({ ...ruban }), lenis: () => lenis };
 
   barreCharge.style.width = "100%";
   rendu(0, 0, false); renderer.render(scene, cam);
