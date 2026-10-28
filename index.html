@@ -618,7 +618,7 @@ const MOVE = 2.6;
 const keys = [];
 const cle = (k, extra) => keys.push({ k, hold: DUREES[k][0], film: DUREES[k][1], ...extra });
 cle("facade"); cle("affiche"); cle("porte");
-C.salles.forEach((s, r) => { cle("salle", { s, r }); s.oeuvres.forEach((o, j) => cle("oeuvre", { s, r, o, j })); });
+C.salles.forEach((s, r) => { cle("salle", { s, r }); s.oeuvres.forEach((o, j) => { if (o.type === "photo" && o.photo) cle("oeuvre", { s, r, o, j }); }); });
 cle("final"); cle("grue");
 let acc = 0;
 keys.forEach((K, i) => { if (i) acc += MOVE; K.a = acc; acc += K.hold; K.b = acc; });
@@ -668,7 +668,7 @@ function calque(K) {
   } else if (K.k === "salle") {
     d.innerHTML = `<div class="bloc" data-z="1.5"><span class="sur">${esc(K.s.num)}</span><h2 class="grand">${esc(K.s.titre)}</h2><p class="verset">${esc(K.s.verset)}<span class="ref">${esc(K.s.ref)}</span></p></div>`;
   } else if (K.k === "oeuvre") {
-    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">${esc(K.s.num)} · ${K.j + 1}/${K.s.oeuvres.length}</span><button class="cartel" aria-label="Lire le cartel : ${esc(K.o.titre)}">${cartelHTML(K.o)}</button></div>`;
+    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">${esc(K.s.num)} · ${K.n}/${K.de}</span><button class="cartel" aria-label="Lire le cartel : ${esc(K.o.titre)}">${cartelHTML(K.o)}</button></div>`;
   } else if (K.k === "final") {
     d.classList.add("hb");
     const btns = P.choix.map((p, i) => `<button class="pagne" data-i="${i}" aria-pressed="${choix === i}"><span class="nuancier">${p.couleurs.map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(p.nom)}</button>`).join("");
@@ -686,6 +686,8 @@ function calque(K) {
   K.el = d; K.op = -1; K.z = [...d.querySelectorAll("[data-z]")].map((e) => [e, +e.dataset.z]);
   $("#calques").append(d);
 }
+// numérotation parmi les seules photos : les œuvres sans photo restent au mur mais la visite ne s'y arrête pas
+C.salles.forEach((s) => { const ks = keys.filter((K) => K.s === s && K.k === "oeuvre"); ks.forEach((K, i) => { K.n = i + 1; K.de = ks.length; }); });
 keys.forEach(calque);
 
 /* ---------- Dessin canvas (textures et film) ---------- */
@@ -1157,15 +1159,14 @@ async function demarrer() {
   // un seul mur par salle, en alternance : droite, gauche, droite (la caméra glisse sans balayer d'un mur à l'autre)
   const cote = (r) => (r % 2 ? -1 : 1);
   const charges = [];
-  keys.forEach((K) => {
-    if (K.k !== "oeuvre") return;
-    const z = -12 * K.r - 2.6 - K.j * 2.45, c = cote(K.r);
-    charges.push(oeuvre(K.o, 1.1, 1.47).then((g) => {
-      g.position.set(c * 3.99, 1.7, z); g.rotation.y = -c * Math.PI / 2; scene.add(g); K.groupe = g;
+  C.salles.forEach((s, r) => s.oeuvres.forEach((o, j) => {
+    const z = -12 * r - 2.6 - j * 2.45, c = cote(r), K = keys.find((K) => K.o === o);
+    charges.push(oeuvre(o, 1.1, 1.47).then((g) => {
+      g.position.set(c * 3.99, 1.7, z); g.rotation.y = -c * Math.PI / 2; scene.add(g); if (K) K.groupe = g;
       const e = { centre: v3(c * 3.99, 1.95, z), spot: v3(c * 3.05, 4.86, z) };
       fixture(e.spot, e.centre); eclairables.push(e);
     }));
-  });
+  }));
   const pagnes = [];
   P.choix.forEach((p, i) => charges.push(oeuvre(p, .6, 1.45).then((g) => { g.position.set((i - 1) * 1.08, 2, -47.98); scene.add(g); pagnes[i] = g; })));
   await Promise.all(charges);
