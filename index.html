@@ -40,6 +40,10 @@ body.nuit #gl { z-index: 7; }
 body.nuit #s-cinema { z-index: auto; }
 body.nuit .rideaux { z-index: 9; }
 body.nuit #suivant { display: none; }
+#decompte { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; pointer-events: none; font-family: var(--display); font-weight: 500; font-size: clamp(110px, 34vw, 220px); color: var(--or-clair); text-shadow: 0 0 40px rgba(255, 196, 92, .55), 0 4px 24px rgba(0, 0, 0, .6); }
+#decompte span { animation: compte 1s ease-out both; }
+@keyframes compte { 0% { opacity: 0; transform: scale(1.6); } 25% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(.85); } }
+#s-cinema.entracte .cine-fin { visibility: hidden; }
 #feux { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 7; pointer-events: none; }
 .scrim{ position: fixed; left: 0; right: 0; z-index: 4; pointer-events: none; }
 .scrim.haut { top: 0; height: 34vh; background: linear-gradient(rgba(14, 11, 8, .74), rgba(14, 11, 8, 0)); }
@@ -1393,7 +1397,7 @@ async function demarrer() {
   function restaurerJour() {
     if (!nuit.on && nuit.etat === "jour") return;
     nuit.id++; nuit.on = false; nuit.etat = "jour";
-    document.body.classList.remove("nuit"); $("#feux")?.remove();
+    document.body.classList.remove("nuit"); $("#feux")?.remove(); $("#decompte")?.remove(); $("#s-cinema").classList.remove("entracte");
     if (nuitObjets) {
       const j = nuitObjets.jour;
       scene.background = j.fond; scene.environment = j.env;
@@ -1406,7 +1410,7 @@ async function demarrer() {
 
   /* feux d'artifice sur canvas 2D : fusées, gerbes, et textes écrits par les étincelles */
   // hauteur à l'écran du faîte du fronton : les fusées partent de derrière le bâtiment
-  const toitEcran = (h = innerHeight) => (1 - new THREE.Vector3(0, 10.8, 0).project(cam).y) / 2 * h;
+  const toitEcran = (h = innerHeight) => (cam.updateMatrixWorld(), (1 - new THREE.Vector3(0, 10.8, 0).project(cam).y) / 2 * h);
   // film : canvas hors DOM de taille fixe, avancé image par image, détonations dans la bande son du film
   function feux(vivant, toit, film) {
     let W = film ? film.W : innerWidth, H = film ? film.H : innerHeight, sc = 1;
@@ -1423,26 +1427,59 @@ async function demarrer() {
     const N = 17, MAX = 5200, MAXTXT = 3200, p = new Float32Array(MAX * N);
     const X = 0, Y = 1, VX = 2, VY = 3, AGE = 4, DUR = 5, COL = 6, SZ = 7, K = 8, TX = 9, TY = 10, X0 = 11, Y0 = 12, HOLD = 13, SEED = 14, GR = 15, DRAG = 16;
     const MAINTIEN = 3.4;
-    let n = 0, residu = false, ts = 0;
+    let n = 0, residu = false, ts = 0, yToit = H;
     const bursts = [];
     const portrait = () => W < H * .9, yTexte = () => H * .3;
 
-    /* détonations */
-    let ac = film?.ac || null, bruit = null, dernier = -1;
-    function boum(f) {
-      if (film ? !ac : muet) return;
-      if (dernier >= 0 && ts - dernier < .11) return; dernier = ts;
+    /* sons : sifflement de la fusée, détonation sourde avec écho, crépitement des gerbes */
+    let ac = film?.ac || null, bruit = null, sortie = null, dernier = -1;
+    function audio() {
+      if (film ? !ac : muet) return null;
       try {
         ac = ac || new (window.AudioContext || window.webkitAudioContext)();
         if (ac.state === "suspended") ac.resume().catch(() => {});
-        if (ac.state !== "running") return;
+        if (ac.state !== "running") return null;
         if (!bruit) {
-          bruit = ac.createBuffer(1, Math.floor(ac.sampleRate * .7), ac.sampleRate);
-          const d = bruit.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.2);
+          bruit = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+          const d = bruit.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+          // compresseur, et un écho grave renvoyé par les façades
+          const cp = ac.createDynamicsCompressor(), ec = ac.createDelay(1), rt = ac.createGain(), fe = ac.createBiquadFilter();
+          cp.threshold.value = -14; cp.ratio.value = 6; cp.connect(film ? film.dest : ac.destination);
+          ec.delayTime.value = .23; rt.gain.value = .32; fe.type = "lowpass"; fe.frequency.value = 700;
+          ec.connect(fe); fe.connect(rt); rt.connect(ec); rt.connect(cp);
+          sortie = ac.createGain(); sortie.connect(cp); sortie.connect(ec);
         }
-        const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
-        s.buffer = bruit; fl.type = "lowpass"; fl.frequency.setValueAtTime(900 + Math.random() * 400, t); fl.frequency.exponentialRampToValueAtTime(90, t + .6);
-        g.gain.value = .12 * f; s.connect(fl); fl.connect(g); g.connect(film ? film.dest : ac.destination); s.start();
+        return ac;
+      } catch (_) { return null; }
+    }
+    // source de bruit filtrée, avec enveloppe
+    function souffle(t, dur, type, f0, f1, vol, att = .005, q = 1) {
+      const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+      s.buffer = bruit; fl.type = type; fl.Q.value = q;
+      fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + att); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      s.connect(fl); fl.connect(g); g.connect(sortie); s.start(t, Math.random() * Math.max(0, 1.9 - dur), dur + .05);
+    }
+    function sifflet(dur) {
+      if (!audio()) return;
+      try { const t = ac.currentTime; souffle(t, dur * .9, "bandpass", 700 + Math.random() * 300, 2400 + Math.random() * 900, .05, dur * .5, 9); } catch (_) {}
+    }
+    function boum(f, crepite) {
+      if (dernier >= 0 && ts - dernier < .09) return;
+      if (!audio()) return; dernier = ts;
+      try {
+        const t = ac.currentTime + Math.random() * .06;
+        // coup sourd : sinus qui chute, puis souffle grave
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + .35);
+        g.gain.setValueAtTime(.55 * f, t); g.gain.exponentialRampToValueAtTime(.0001, t + .5);
+        o.connect(g); g.connect(sortie); o.start(t); o.stop(t + .55);
+        souffle(t, .09, "highpass", 2500, 1800, .35 * f, .002);
+        souffle(t, 1.4, "lowpass", 2600, 80, .5 * f, .004);
+        if (crepite && !reduit) for (let i = 0; i < 26; i++) {
+          const tc = t + .45 + Math.random() * 1.3;
+          souffle(tc, .03 + Math.random() * .03, "highpass", 3500 + Math.random() * 3000, 2500, .06 + Math.random() * .08, .001);
+        }
       } catch (_) {}
     }
 
@@ -1455,8 +1492,10 @@ async function demarrer() {
       return o;
     }
     function tir(tx, ty, b, dur = .8 + Math.random() * .35) {
-      const y0 = toit ? toit() + 4 : H + 8, x0 = tx + (Math.random() - .5) * W * .2, o = emettre(x0, y0, 0, 0, dur, 6, 2.2 * sc + .8, 0);
+      if (toit) yToit = toit();
+      const y0 = toit ? yToit + 4 : H + 8, x0 = tx + (Math.random() - .5) * W * .2, o = emettre(x0, y0, 0, 0, dur, 6, 2.2 * sc + .8, 0);
       if (o < 0) return;
+      if (Math.random() < .6 || b.texte) sifflet(dur);
       bursts.push(b); p[o + X0] = x0; p[o + Y0] = y0; p[o + TX] = tx; p[o + TY] = ty; p[o + GR] = bursts.length - 1;
     }
     const gerbe = (type) => {
@@ -1464,7 +1503,7 @@ async function demarrer() {
       return { type: t, col: t === "saule" ? (Math.random() < .5 ? 0 : 6) : COLS[(Math.random() * COLS.length) | 0], col2: 1 };
     };
     function eclater(b, x, y) {
-      boum(b.texte ? 1 : .6);
+      boum(b.texte ? 1 : .6, b.type !== "pivoine");
       if (b.texte) ecrire(b.texte, x, y);
       const t = b.type, R = (b.texte ? 120 : 190 + Math.random() * 70) * sc;
       const nb = Math.round((t === "saule" ? 70 : t === "chrysantheme" ? 85 : 100) * (reduit ? .55 : 1) * (b.texte ? .4 : 1));
@@ -1519,6 +1558,8 @@ async function demarrer() {
       ctx.globalCompositeOperation = "destination-out"; ctx.globalAlpha = 1; ctx.fillStyle = `rgba(0,0,0,${1 - Math.exp(-dt * 12)})`; ctx.fillRect(0, 0, W, H);
       if (!n) { if (residu) { ctx.clearRect(0, 0, W, H); residu = false; } return; }
       residu = true; ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+      // rien ne passe devant la façade : tout est dessiné au-dessus du faîte
+      ctx.save(); if (toit) { ctx.beginPath(); ctx.rect(0, 0, W, yToit); ctx.clip(); }
       for (let i = 0; i < n; i++) {
         const o = i * N, k = p[o + K], x = p[o + X], y = p[o + Y], age = p[o + AGE];
         if (k === 2) {
@@ -1534,6 +1575,7 @@ async function demarrer() {
           ctx.beginPath(); ctx.moveTo(x - p[o + VX] * .028, y - p[o + VY] * .028); ctx.lineTo(x, y); ctx.stroke();
         }
       }
+      ctx.restore();
     }
 
     /* texte : mots dessinés hors écran puis échantillonnés en points */
@@ -1612,13 +1654,17 @@ async function demarrer() {
   }
   async function nuitDeFete() {
     if (nuit.etat !== "jour") return;
-    const id = ++nuit.id, vivant = () => nuit.id === id, voile = $("#voile-noir");
+    const id = ++nuit.id, vivant = () => nuit.id === id, c = $("#s-cinema");
     nuit.etat = "feux"; lenis?.stop();
-    voile.classList.add("on"); await attendre(800);
+    // les rideaux se ferment sur la lettre, la nuit tombe derrière eux, puis ils se rouvrent sur la façade illuminée
+    c.classList.add("entracte"); c.classList.remove("ouvert"); await attendre(2800);
     if (!vivant()) return;
-    entrerNuit(); await attendre(250);
-    voile.classList.remove("on");
+    entrerNuit(); await attendre(300);
     if (!vivant()) return;
+    c.classList.add("ouvert");
+    const d = document.createElement("div"); d.id = "decompte"; d.setAttribute("aria-live", "polite"); document.body.appendChild(d);
+    for (const k of [3, 2, 1]) { d.innerHTML = `<span>${k}</span>`; await attendre(1000); if (!vivant()) return d.remove(); }
+    d.remove(); c.classList.remove("entracte");
     await feux(vivant, toitEcran);
     if (vivant()) nuit.etat = "fini";
   }
@@ -1915,9 +1961,9 @@ function finFilm(x, l) {
   x.restore();
 }
 // le film suit la visite guidée pas à pas : ruban, pagne, lettre, nuit et feux, rideaux (mêmes durées qu'en direct)
-const F = W / 390, FIN_FILM = 5, R_ATTENTE = 1.2, R_COUPE = 1.8, CHOIX = 2.4, L_ARRIVE = 3.5, NOIR = .8, RIDEAUX = 1.2 + 2.6 + 1;
+const F = W / 390, FIN_FILM = 5, R_ATTENTE = 1.2, R_COUPE = 1.8, CHOIX = 2.4, L_ARRIVE = 3.5, FERME = 2.8, DECOMPTE = 3.3, RIDEAUX = 1.2 + 2.6 + 1;
 const LECTURE = clamp($(".lettre").textContent.trim().split(/\s+/).length / 7.8, 6, 27), LETTRE = L_ARRIVE + 1.2 + LECTURE + .6 + 3.5;
-const DUREE_FILM = duree(T) + R_ATTENTE + R_COUPE + CHOIX + LETTRE + NOIR + .25 + (reduit ? 28.5 : 43.8) + 7.5 + RIDEAUX + FIN_FILM;
+const DUREE_FILM = duree(T) + R_ATTENTE + R_COUPE + CHOIX + LETTRE + FERME + DECOMPTE + (reduit ? 28.5 : 43.8) + 7.5 + RIDEAUX + FIN_FILM;
 const enMinutes = (d) => `${Math.floor(d / 60)} min ${String(Math.round(d % 60)).padStart(2, "0")}`;
 const nouveauFilm = () => ({ ph: "visite", s: 0, u: 0, tn: 0, retour: 0, coupe: false, vu: false, feu: null });
 const NUIT_F = ["nuit", "rideaux", "fin"];
@@ -1931,12 +1977,12 @@ function avancerFilm(st, dt, t, son) {
     else if (st.s >= T) passe("lettre");
   } else if (ph === "ruban") { if (st.u >= R_ATTENTE + R_COUPE) { st.coupe = true; st.retour = 0; st.ph = "visite"; } }
   else if (ph === "choix") { if (st.u >= CHOIX) { st.vu = true; st.ph = "visite"; } }
-  else if (ph === "lettre") { if (st.u >= LETTRE) passe("noir"); }
-  else if (ph === "noir") { if (st.u >= NOIR) passe("nuit"); }
+  else if (ph === "lettre") { if (st.u >= LETTRE) passe("ferme"); }
+  else if (ph === "ferme") { if (st.u >= FERME) passe("nuit"); }
   if (NUIT_F.includes(st.ph)) {
     // la caméra de nuit est posée avant les tirs : les fusées partent du toit vu par cette caméra
     st.tn += dt; moteur.nuit(t, st.tn / 52);
-    if (st.ph === "nuit" && st.u >= .25) {
+    if (st.ph === "nuit" && st.u >= DECOMPTE) {
       st.feu ??= moteur.feux(son?.ac, son?.maitre);
       if (st.feu.etape(dt)) passe("rideaux");
     } else if (st.ph === "rideaux" && st.u >= RIDEAUX) passe("fin");
@@ -2028,22 +2074,31 @@ function rideaux2d(x, v) {
   x.fillStyle = gv; x.fillRect(0, yv, W, hv); x.shadowColor = "transparent"; x.fillStyle = "#c9a35a"; x.fillRect(0, yv + hv - 3 * F, W, 3 * F);
   x.restore();
 }
+// 3, 2, 1 en grand pendant que les rideaux s'ouvrent sur la nuit
+function decompte2d(x, u) {
+  if (u < 0 || u >= 3) return;
+  const k = u % 1, a = k < .25 ? k / .25 : k > .75 ? (1 - k) / .25 : 1, sc = k < .25 ? 1.6 - .6 * k / .25 : k > .75 ? 1 - .15 * (k - .75) / .25 : 1;
+  x.save(); x.globalAlpha = a; x.translate(W / 2, H / 2); x.scale(sc, sc);
+  x.font = `500 ${Math.min(W * .34, 220 * F)}px ${POL.d}`; x.textAlign = "center"; x.textBaseline = "middle";
+  x.shadowColor = "rgba(255, 196, 92, .55)"; x.shadowBlur = 40 * F; x.fillStyle = "#ecd49b"; x.fillText(String(3 - Math.floor(u)), 0, 0);
+  x.restore();
+}
 function imageFilm(x, st, t) {
   const ph = st.ph;
   if (!NUIT_F.includes(ph)) {
-    const s = ph === "lettre" || ph === "noir" ? T : st.s;
+    const s = ph === "lettre" || ph === "ferme" ? T : st.s;
     x.drawImage(moteur.image(s, t, kRubanF(st)), 0, 0, W, H);
     // pendant l'arrêt au ruban les cartes s'effacent, puis reviennent quand la visite reprend
-    const m = ph === "ruban" ? 1 - clamp(st.u / .5) : ph === "lettre" ? 1 - clamp(st.u / 1.5) : ph === "noir" ? 0 : st.coupe ? clamp(st.retour / .5) : 1;
+    const m = ph === "ruban" ? 1 - clamp(st.u / .5) : ph === "lettre" ? 1 - clamp(st.u / 1.5) : ph === "ferme" ? 0 : st.coupe ? clamp(st.retour / .5) : 1;
     if (m > .01) keys.forEach((K, i) => { const a = opacite(K, i, s) * m; if (a > .01) carte2d(x, K, a, s); });
     if (ph === "ruban") ruban2d(x, st.u);
-    if (ph === "lettre" || ph === "noir") lettre2d(x, ph === "noir" ? LETTRE : st.u); else cadre2d(x);
-    if (ph === "noir") { x.fillStyle = `rgba(0, 0, 0, ${clamp(st.u / NOIR)})`; x.fillRect(0, 0, W, H); }
+    if (ph === "lettre" || ph === "ferme") lettre2d(x, ph === "ferme" ? LETTRE : st.u); else cadre2d(x);
+    if (ph === "ferme") rideaux2d(x, st.u);
     return;
   }
   x.drawImage(moteur.photo(), 0, 0, W, H);
   if (st.feu) { x.save(); x.globalAlpha = ph === "nuit" ? 1 : 1 - clamp(st.u / 1.2); x.drawImage(st.feu.cv, 0, 0, W, H); x.restore(); }
-  if (ph === "nuit" && st.u < .8) { x.fillStyle = `rgba(0, 0, 0, ${1 - clamp((st.u - .25) / .55)})`; x.fillRect(0, 0, W, H); }
+  if (ph === "nuit" && st.u < DECOMPTE) { if (st.u < 3) rideaux2d(x, 2.6 - (st.u - .3)); decompte2d(x, st.u - .3); }
   if (ph !== "nuit") rideaux2d(x, ph === "fin" ? 9 : st.u - 1.2);
   if (ph === "fin") finFilm(x, st.u);
 }
