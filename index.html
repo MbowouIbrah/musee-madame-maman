@@ -161,6 +161,7 @@ body.auto #cadre { opacity: 1; }
   box-shadow: 0 8px 20px rgba(20, 14, 8, .25);
 }
 body.auto.pause #pause { opacity: 1; transform: translate(-50%, 0); }
+body.auto { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .visite-auto {
   pointer-events: auto; display: block; margin: 14px auto 10px; padding: 13px 24px; border-radius: 999px; cursor: pointer;
   font: 600 13px var(--sans, inherit); letter-spacing: .12em; text-transform: uppercase; color: #fffdf7;
@@ -339,7 +340,7 @@ body.ruban #calques, body.ruban #suivant { opacity: 0; pointer-events: none; tra
 </section>
 
 <div id="cadre" aria-hidden="true"></div>
-<p id="pause" aria-live="polite">En pause · touche l'écran pour reprendre</p>
+<p id="pause" aria-live="polite">En pause · relâche pour reprendre</p>
 
 <button id="son" aria-label="Couper la musique" aria-pressed="false">
   <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#ecd49b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8v4h3l4 3.5v-11L6 8H3z"/><path class="ondes" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.5 5a7 7 0 0 1 0 10"/><path class="muet" d="m13.5 8 4 4m0-4-4 4"/></svg>
@@ -1682,8 +1683,13 @@ async function demarrer() {
   /* visite guidée : la caméra avance seule, la page ne défile qu'à la sortie ; un toucher met en pause */
   const auto = { on: false, pause: false, attente: false, s: 0, dt: 0, final: false };
   function pauser(v) { auto.pause = v; document.body.classList.toggle("pause", v); }
+  // pendant la visite guidée, l'écran ne se met pas en veille (repris au retour sur la page)
+  let veille = null;
+  const eveiller = async () => { try { veille = await navigator.wakeLock?.request("screen"); } catch (_) {} };
+  document.addEventListener("visibilitychange", () => { if (veille && document.visibilityState === "visible") eveiller(); });
   function guide(on) {
     auto.on = on; pauser(false); auto.attente = false; document.body.classList.toggle("auto", on);
+    if (on && !veille) eveiller();
     if (on) return;
     const y = auto.s / T * etendue();
     if (lenis) lenis.scrollTo(y, { immediate: true, force: true }); else scrollTo(0, y);
@@ -1787,7 +1793,15 @@ async function demarrer() {
   /* toucher : œuvres, musique, gyroscope ; souris : flottement */
   const rc = new THREE.Raycaster(), ndc = new THREE.Vector2();
   let appui = null, gyro = false;
-  addEventListener("pointerdown", (e) => { appui ={ x: e.clientX, y: e.clientY, cible: e.target }; }, { passive: true });
+  // comme un statut WhatsApp : appui maintenu = pause, relâcher = reprise
+  let tenue = null, tenu = false;
+  const relacher = () => { clearTimeout(tenue); if (tenu) { tenu = false; pauser(false); } };
+  addEventListener("pointerdown", (e) => {
+    appui = { x: e.clientX, y: e.clientY, cible: e.target };
+    if (auto.on && !auto.attente && !e.target.closest?.("button, a, .fiche")) tenue = setTimeout(() => { tenu = true; pauser(true); }, 180);
+  }, { passive: true });
+  addEventListener("pointercancel", relacher);
+  addEventListener("contextmenu", (e) => { if (auto.on) e.preventDefault(); });
   addEventListener("pointerup", (e) => {
     if (!gyro && !reduit && window.DeviceOrientationEvent && e.pointerType !== "mouse") {
       gyro = true;
@@ -1795,15 +1809,17 @@ async function demarrer() {
       if (typeof DeviceOrientationEvent.requestPermission === "function") DeviceOrientationEvent.requestPermission().then((r) => r === "granted" && ecoute()).catch(() => {});
       else ecoute();
     }
+    const etaitTenu = tenu; relacher();
     if (!appui) return;
     const a = appui; appui = null;
+    if (etaitTenu) return;
     if (ruban.attend && !a.cible.closest?.("button")) {
       ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); rc.setFromCamera(ndc, cam);
       if (rc.intersectObjects([...pans, noeud], true).length || Math.abs(e.clientY - (1 - ecranRuban().y) / 2 * innerHeight) < 40) couperRuban(e.clientX);
       return;
     }
     if (Math.hypot(e.clientX - a.x, e.clientY - a.y) > 8 || a.cible.closest?.("button, a, .fiche, .lettre, .film, #s-lettre, #s-cinema")) return;
-    if (auto.on && !auto.attente) { pauser(!auto.pause); return; }
+    if (auto.on && !auto.attente) return;
     if (position() > etendue() + innerHeight * .2 || enFilm || $("#fiche").classList.contains("on")) return;
     ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
     rc.setFromCamera(ndc, cam);
