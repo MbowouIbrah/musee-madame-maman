@@ -1,0 +1,1869 @@
+<title>Musée Madame Maman</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+/* Layout : un canvas WebGL fixe en fond ; le défilement d'un espaceur (#parcours) pilote la caméra ; les textes (calques) se superposent en fondu et en parallaxe ; la lettre suit en flux normal. */
+:root {
+  color-scheme: dark;
+  --nuit: #07080d;
+  --or: #c7a25a;
+  --or-clair: #ecd49b;
+  --or-fonce: #8a6a2e;
+  --ivoire: #f2ebdc;
+  --encre: #2b241d;
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --texte: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --gx: max(16px, env(safe-area-inset-left, 0px));
+  --gy: max(16px, env(safe-area-inset-right, 0px));
+}
+* { box-sizing: border-box; }
+html { background: var(--nuit); overscroll-behavior-y: none; }
+body {
+  margin: 0; background: var(--nuit); color: var(--ivoire);
+  font: 400 16px/1.55 var(--texte);
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--or-clair); outline-offset: 3px; }
+
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; touch-action: pan-y; }
+#parcours { position: relative; z-index: 1; }
+/* nuit de fête : la scène 3D passe par-dessus la lettre, sous les rideaux */
+body.nuit { overflow: hidden; }
+body.nuit #gl { z-index: 7; }
+body.nuit #s-cinema { z-index: auto; }
+body.nuit .rideaux { z-index: 9; }
+body.nuit #suivant { display: none; }
+#feux { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 7; pointer-events: none; }
+.scrim{ position: fixed; left: 0; right: 0; z-index: 4; pointer-events: none; }
+.scrim.haut { top: 0; height: 34vh; background: linear-gradient(rgba(14, 11, 8, .74), rgba(14, 11, 8, 0)); }
+.scrim.bas { bottom: 0; height: 46vh; background: linear-gradient(rgba(14, 11, 8, 0), rgba(14, 11, 8, .86)); }
+
+#calques { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+.calque {
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; text-align: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 30px) var(--gy) calc(env(safe-area-inset-bottom, 0px) + 92px) var(--gx);
+  opacity: 0; visibility: hidden; text-shadow: 0 2px 18px rgba(0, 0, 0, .55);
+}
+.calque.hb { justify-content: space-between; }
+.calque.ht { justify-content: flex-start; }
+.expo { font-family: var(--display); font-style: italic; font-size: clamp(20px, 5.6vw, 26px); color: var(--ivoire); margin: 0; }
+.verset { font-family: var(--display); font-style: italic; font-size: clamp(18px, 5vw, 22px); line-height: 1.4; color: var(--or-clair); margin: 0; text-wrap: balance; }
+.verset .ref { display: block; margin-top: 8px; font-style: normal; font-size: 11px; letter-spacing: .25em; text-transform: uppercase; opacity: .85; }
+.calque.on button { pointer-events: auto; }
+.calque.on .apres:not(.actif) button { pointer-events: none; }
+.bloc { display: grid; gap: 12px; justify-items: center; max-width: 36ch; will-change: transform; }
+.calque .bloc {
+  width: min(560px, 100%); max-width: none; gap: 8px; padding: 14px 22px 15px; border-radius: 14px; color: var(--encre); text-shadow: none;
+  background: linear-gradient(165deg, rgba(255, 254, 250, .96), rgba(249, 242, 228, .94)); border: 1px solid rgba(199, 162, 90, .75);
+  box-shadow: inset 0 0 0 5px rgba(255, 253, 247, .9), inset 0 0 0 6px rgba(199, 162, 90, .45), 0 18px 44px rgba(20, 14, 8, .3);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); position: relative;
+}
+.calque .bloc::before {
+  content: ""; position: absolute; top: -1px; left: 50%; width: 56px; height: 2px; transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--or), transparent);
+}
+.calque .bloc .sur, .calque .bloc .verset, .calque .bloc .annonce, .calque .bloc .pagne-r { color: var(--or-fonce); }
+.calque .bloc .titre-musee, .calque .bloc .expo, .calque .bloc .pagne-q, .calque .bloc .pagne-env, .calque .bloc .grand { color: var(--encre); text-shadow: none; }
+.calque .bloc .dates { color: #6f5d48; }
+.calque .bloc.apres { padding: 16px 12px; }
+.calque .bloc.apres .pagne { min-width: 86px; flex: 1; }
+.calque .bloc .cartel { box-shadow: 0 0 0 1px rgba(156, 122, 60, .3); width: 100%; }
+.calque .bloc .grand { font-size: clamp(28px, 7.8vw, 44px); }
+.calque .bloc .verset { font-size: clamp(16px, 4.4vw, 20px); line-height: 1.35; }
+.calque .bloc .annonce, .calque .bloc .verset { max-width: 34ch; }
+.calque .bloc .texte { font-size: 15px; line-height: 1.5; }
+.sur { font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--or-clair); font-weight: 500; }
+.titre-musee { font-family: var(--display); font-weight: 500; font-size: clamp(34px, 9.6vw, 60px); line-height: 1.04; margin: 0; color: var(--ivoire); }
+.titre-musee .mot { display: inline-block; overflow: hidden; padding: 0 .02em .1em; white-space: nowrap; }
+.titre-musee .l { display: inline-block; }
+.dates { font-size: 13px; letter-spacing: .3em; color: #cbbb9c; font-variant-numeric: tabular-nums; padding-left: .3em; }
+.annonce { font-family: var(--display); font-style: italic; font-size: clamp(19px, 5.2vw, 24px); line-height: 1.35; max-width: 22ch; text-wrap: balance; color: var(--or-clair); margin: 0; }
+.indice { font-size: 13px; opacity: .72; }
+.pulse { animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.calque .bloc .grand.suspense { font-size: clamp(24px, 6.4vw, 36px); line-height: 1.12; margin: 6px 0 10px; }
+.pts i { font-style: normal; animation: pts 1.8s ease-in-out infinite; }
+.pts i:nth-child(2) { animation-delay: .3s; } .pts i:nth-child(3) { animation-delay: .6s; }
+@keyframes pts { 0%, 100% { opacity: .15; } 40%, 60% { opacity: 1; } }
+.grand { font-family: var(--display); font-size: clamp(38px, 11vw, 58px); line-height: 1.02; font-weight: 500; margin: 0; text-wrap: balance; }
+.calque .texte { margin: 0; font-size: 16px; line-height: 1.6; opacity: .9; }
+.titre-salle { font-family: var(--display); font-style: italic; font-size: 22px; }
+.final-grille { display: grid; justify-items: center; align-items: end; }
+.final-grille > * { grid-area: 1 / 1; }
+.calque.on a { pointer-events: auto; }
+.calque.on .apres:not(.actif) a { pointer-events: none; }
+
+/* choix du pagne */
+.pagne-q { margin: 0; font-family: var(--display); font-style: italic; font-size: 20px; color: var(--ivoire); text-shadow: 0 1px 12px rgba(20, 14, 8, .85), 0 0 2px rgba(20, 14, 8, .6); }
+.pagnes { display: flex; gap: 10px; justify-content: center; }
+.pagne {
+  display: grid; gap: 7px; justify-items: center; min-width: 94px; padding: 10px 10px 9px; border-radius: 10px; text-shadow: none;
+  border: 1px solid rgba(156, 122, 60, .45); background: #fff; color: var(--encre);
+  font-size: 13px; font-weight: 500; transition: border-color .3s, background .3s, transform .3s;
+}
+.pagne .nuancier { display: flex; width: 66px; height: 30px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
+.pagne .nuancier i { flex: 1; }
+.pagne[aria-pressed="true"] { border-color: var(--or-fonce); background: #f3e6c6; box-shadow: 0 0 0 1px var(--or-fonce); transform: translateY(-3px); }
+.pagne-r { margin: 0; min-height: 1.4em; font-size: 14px; color: var(--or-clair); }
+.pagne-env { font-size: 13px; color: var(--ivoire); text-decoration: underline; text-underline-offset: 3px; }
+
+.btn {
+  border: 1px solid rgba(236, 212, 155, .55); background: rgba(0, 0, 0, .18); border-radius: 999px;
+  padding: 12px 22px; letter-spacing: .02em; font-weight: 500; font-size: 15px;
+  transition: background .3s, border-color .3s;
+}
+.btn:hover { background: rgba(236, 212, 155, .12); border-color: var(--or-clair); }
+.btn.plein { background: var(--or-clair); color: var(--encre); border-color: var(--or-clair); }
+
+.cartel {
+  border: 1px solid rgba(199, 162, 90, .7); text-align: left; width: min(100%, 320px); color: var(--encre); text-shadow: none;
+  background: linear-gradient(165deg, #fffefa, #f7efdd); padding: 15px 17px 14px; border-radius: 2px; display: grid; gap: 4px;
+  box-shadow: inset 0 0 0 4px #fffdf7, inset 0 0 0 5px rgba(199, 162, 90, .4), 0 12px 28px rgba(0, 0, 0, .4);
+}
+.cartel .inv { font-size: 11.5px; color: #8a7660; font-variant-numeric: tabular-nums; }
+.cartel .t { font-family: var(--display); font-style: italic; font-size: 19px; line-height: 1.2; }
+.cartel .m { font-size: 12.5px; color: #5d4f40; }
+.cartel .lire { font-size: 11.5px; color: var(--or-fonce); margin-top: 6px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+
+#suivant {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); z-index: 7; transform: translateX(-50%);
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(236, 212, 155, .5); padding: 0;
+  background: rgba(7, 8, 13, .35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  display: grid; place-items: center; transition: opacity .4s, background .3s;
+}
+#suivant:hover { background: rgba(236, 212, 155, .14); }
+#suivant.cache, body.auto #suivant { opacity: 0; pointer-events: none; }
+
+/* visite guidée : cadre doré plein écran, comme les cartes */
+#cadre {
+  position: fixed; z-index: 7; pointer-events: none; opacity: 0; transition: opacity 1.4s ease;
+  inset: calc(env(safe-area-inset-top, 0px) + 10px) calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 10px) calc(env(safe-area-inset-left, 0px) + 10px);
+  border: 1px solid rgba(199, 162, 90, .8); border-radius: 4px;
+  box-shadow: 0 0 0 30px rgba(250, 246, 238, .96), inset 0 0 0 5px rgba(255, 253, 247, .55), inset 0 0 0 6px rgba(199, 162, 90, .5), inset 0 0 24px rgba(20, 14, 8, .18);
+}
+#cadre::before { content: ""; position: absolute; left: 50%; top: -2px; width: 120px; height: 3px; transform: translateX(-50%); background: linear-gradient(90deg, rgba(199, 162, 90, 0), #c7a25a, rgba(199, 162, 90, 0)); }
+body.auto #cadre { opacity: 1; }
+#pause {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 30px); z-index: 8; margin: 0; transform: translate(-50%, 8px);
+  padding: 9px 16px; border-radius: 999px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .4s, transform .4s;
+  font-size: 12.5px; letter-spacing: .04em; color: var(--encre); background: rgba(255, 253, 247, .94); border: 1px solid rgba(199, 162, 90, .7);
+  box-shadow: 0 8px 20px rgba(20, 14, 8, .25);
+}
+body.auto.pause #pause { opacity: 1; transform: translate(-50%, 0); }
+.visite-auto {
+  pointer-events: auto; display: block; margin: 14px auto 10px; padding: 13px 24px; border-radius: 999px; cursor: pointer;
+  font: 600 13px var(--sans, inherit); letter-spacing: .12em; text-transform: uppercase; color: #fffdf7;
+  background: linear-gradient(180deg, #c7a25a, var(--or-fonce)); border: 1px solid var(--or-fonce); box-shadow: 0 8px 20px rgba(138, 106, 46, .3);
+}
+body.auto .visite-auto, body.auto .calque.hb .indice { visibility: hidden; }
+
+/* fiche (cartel développé) */
+.fiche-fond { position: fixed; inset: 0; background: rgba(0, 0, 0, .5); opacity: 0; pointer-events: none; transition: opacity .35s; z-index: 30; }
+.fiche-fond.on { opacity: 1; pointer-events: auto; }
+.fiche {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-height: 78dvh; overflow-y: auto;
+  background: linear-gradient(180deg, #fffefa, #f7efdd); color: var(--encre); border-radius: 14px 14px 0 0;
+  border-top: 2px solid var(--or); box-shadow: 0 -18px 40px rgba(0, 0, 0, .35);
+  padding: 26px var(--gy) calc(env(safe-area-inset-bottom, 0px) + 26px) var(--gx);
+  transform: translateY(105%); transition: transform .45s cubic-bezier(.2, .8, .2, 1);
+  -webkit-user-select: text; user-select: text;
+}
+.fiche.on { transform: none; }
+.fiche-in { max-width: 560px; margin: 0 auto; display: grid; gap: 10px; }
+.fiche .inv { font-size: 12px; color: #8a7660; }
+.fiche h2 { font-family: var(--display); font-style: italic; font-weight: 500; font-size: 30px; line-height: 1.1; margin: 0; text-wrap: balance; }
+.fiche .m { font-size: 13.5px; color: #5d4f40; }
+.fiche .corps { font-family: var(--display); font-size: 18.5px; line-height: 1.6; margin: 8px 0 6px; white-space: pre-line; }
+.fiche .btn { justify-self: start; border-color: var(--or); color: var(--or-fonce); background: transparent; }
+
+/* lettre */
+#s-lettre {
+  position: relative; z-index: 6; min-height: 100svh; display: flex; flex-direction: column; align-items: center;
+  padding: 30vh var(--gy) calc(env(safe-area-inset-bottom, 0px) + 30px) var(--gx);
+  background: linear-gradient(rgba(8, 6, 5, 0), rgba(8, 6, 5, .88) 32vh);
+}
+.lettre {
+  width: min(100%, 520px); margin: 14px 0 26px; color: var(--encre); background: linear-gradient(165deg, #fffefa, #f7efdd);
+  padding: 34px 28px 30px; border-radius: 2px; border: 1px solid rgba(199, 162, 90, .75);
+  box-shadow: inset 0 0 0 7px #fffdf7, inset 0 0 0 8px rgba(199, 162, 90, .45), 0 30px 50px rgba(0, 0, 0, .5);
+  background-image: radial-gradient(rgba(43, 36, 29, .05) 1px, transparent 1px), linear-gradient(165deg, #fffefa, #f7efdd);
+  background-size: 4px 4px, auto;
+  -webkit-user-select: text; user-select: text;
+}
+.lettre .entete-l { font-size: 12.5px; color: #8a7660; margin-bottom: 18px; }
+.lettre h1 { font-family: var(--display); font-weight: 500; color: var(--or-fonce); font-size: clamp(32px, 9vw, 44px); line-height: 1.05; margin: 0 0 18px; text-wrap: balance; }
+.lettre .corps { font-family: var(--display); font-size: 18px; line-height: 1.7; white-space: pre-line; }
+.lettre .sign { font-family: var(--display); font-style: italic; font-size: 26px; color: var(--or-fonce); margin-top: 18px; text-align: right; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 20px; }
+
+/* salle de cinéma */
+#s-cinema {
+  position: relative; z-index: 6; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; overflow: hidden;
+  padding: calc(env(safe-area-inset-top, 0px) + 46px) var(--gy) calc(env(safe-area-inset-bottom, 0px) + 28px) var(--gx);
+  background: radial-gradient(130% 55% at 50% 0%, #3b1016 0%, #170709 55%, #080404 100%);
+}
+.cine-titre { margin: 0; font-family: var(--display); font-weight: 500; font-size: clamp(30px, 8.6vw, 44px); line-height: 1.05; color: var(--ivoire); text-wrap: balance; text-shadow: 0 2px 18px rgba(0, 0, 0, .6); }
+.cine-titre em { color: var(--or-clair); }
+.cine-sous { margin: 0 0 8px; font-size: 13.5px; color: #e3d3b4; max-width: 34ch; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
+/* rideaux : se ferment en surimpression sur tout l'écran (par-dessus la lettre lue), le texte est posé dessus */
+.rideaux { position: fixed; inset: 0; z-index: 3; visibility: visible; }
+.rideaux::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 64px; z-index: 2;
+  background: linear-gradient(#5e0f19, #3a0910); border-bottom: 3px solid #c9a35a; box-shadow: 0 6px 18px rgba(0, 0, 0, .55);
+  transition: transform 1.6s cubic-bezier(.7, 0, .2, 1);
+}
+.rideau {
+  position: absolute; top: 0; bottom: 0; width: 51%; transition: transform 2.6s cubic-bezier(.65, 0, .25, 1);
+  background: radial-gradient(120% 40% at 50% 100%, rgba(0, 0, 0, .5), rgba(0, 0, 0, 0) 70%),
+    repeating-linear-gradient(90deg, #4a0a13 0, #7e1825 22px, #9a2230 30px, #6a1220 40px, #4a0a13 52px);
+}
+.rideau.g { left: 0; box-shadow: inset -24px 0 30px rgba(0, 0, 0, .45); }
+.rideau.d { right: 0; box-shadow: inset 24px 0 30px rgba(0, 0, 0, .45); }
+.sur-rideau {
+  position: absolute; inset: 64px 0 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 24px var(--gx);
+  background: radial-gradient(60% 45% at 50% 50%, rgba(18, 4, 6, .6), rgba(18, 4, 6, 0)); transition: opacity 1.2s ease 1.8s;
+}
+.cine-fin { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 360px; }
+.cine-fin .btn { width: 100%; }
+.cine-fin .btn.plein { margin-top: 6px; }
+.aide { margin: -4px 0 6px; font-size: 12px; line-height: 1.45; color: #d9c7a5; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
+.liens { margin: 4px 0 0; display: flex; gap: 10px; align-items: center; color: #d9c7a5; }
+.lien { background: none; border: 0; padding: 6px 2px; font: inherit; font-size: 13px; color: var(--or-clair); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+#s-cinema.ouvert .rideau.g { transform: translateX(-100%); }
+#s-cinema.ouvert .rideau.d { transform: translateX(100%); }
+#s-cinema.ouvert .rideaux::before { transform: translateY(-100%); }
+#s-cinema.ouvert .rideaux, #s-cinema.ouvert .sur-rideau { pointer-events: none; }
+#s-cinema.ouvert .rideaux { visibility: hidden; transition: visibility 0s 2.7s; }
+#s-cinema.ouvert .sur-rideau { opacity: 0; transition-delay: 0s; }
+.credits { max-width: 46ch; margin: 10px 0 0; font-size: 11.5px; line-height: 1.5; color: #a8977a; }
+#son {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 14px; z-index: 8; width: 40px; height: 40px; padding: 0; border-radius: 50%;
+  border: 1px solid rgba(236, 212, 155, .45); background: rgba(7, 8, 13, .35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+}
+#son .muet, #son.coupe .ondes { display: none; }
+#son.coupe .muet { display: inline; }
+
+/* film */
+.film { position: fixed; inset: 0; z-index: 60; background: rgba(8, 6, 4, .96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) var(--gy) calc(env(safe-area-inset-bottom, 0px) + 16px) var(--gx); }
+.film canvas, .film video { height: min(62dvh, 560px); aspect-ratio: 9 / 16; max-width: 100%; background: #000; border-radius: 8px; box-shadow: 0 20px 40px rgba(0, 0, 0, .6); }
+.barre { width: min(100%, 300px); height: 3px; background: rgba(255, 255, 255, .15); border-radius: 3px; overflow: hidden; }
+.barre i { display: block; height: 100%; width: 0; background: var(--or-clair); }
+.film .etat { font-size: 14px; text-align: center; max-width: 34ch; opacity: .85; margin: 0; }
+
+.voile-noir { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .55s ease; z-index: 50; }
+.voile-noir.on { opacity: 1; }
+#charge {
+  position: fixed; inset: 0; z-index: 70; background: var(--nuit); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 0 var(--gy) 0 var(--gx); text-align: center; transition: opacity 1.1s ease, visibility 0s linear 1.1s;
+}
+#charge.fin { opacity: 0; visibility: hidden; }
+#charge p { margin: 0; font-family: var(--display); font-style: italic; font-size: 20px; color: var(--or-clair); max-width: 26ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+
+<canvas id="gl" aria-label="Visite du musée en 3D"></canvas>
+<div class="scrim haut"></div>
+<div class="scrim bas"></div>
+<div id="calques"></div>
+<div id="parcours"></div>
+
+<section id="s-lettre" aria-label="Lettre">
+  <article class="lettre">
+    <div class="entete-l" data-c="lieuDate"></div>
+    <h1 data-c="lettreTitre"></h1>
+    <div class="corps" data-c="lettre"></div>
+    <div class="sign" data-c="signature"></div>
+  </article>
+  <div class="actions">
+    <button class="btn plein" id="aller-cine">Continuer</button>
+  </div>
+</section>
+
+<section id="s-cinema" class="ouvert" aria-label="Fin de la visite">
+  <div class="rideaux">
+    <div class="rideau g"></div><div class="rideau d"></div>
+    <div class="sur-rideau">
+      <div class="cine-fin">
+        <span class="sur">Fin de la visite</span>
+        <h2 class="cine-titre">Ce musée est <em>à toi</em></h2>
+        <p class="cine-sous">Garde le film de ta visite précieusement, ou partage-le avec ceux que tu aimes.</p>
+        <button class="btn plein" id="faire-film">Télécharger le film de la visite</button>
+        <button class="btn" id="partager-film">Mettre le film en statut WhatsApp</button>
+        <p class="aide" id="aide-film"></p>
+        <p class="liens"><button class="lien" id="revoir">Revoir la visite</button><span aria-hidden="true">·</span><button class="lien" id="revisiter">Visiter à mon rythme</button></p>
+        <p class="credits" id="credits"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="cadre" aria-hidden="true"></div>
+<p id="pause" aria-live="polite">En pause · touche l'écran pour reprendre</p>
+
+<button id="son" aria-label="Couper la musique" aria-pressed="false">
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#ecd49b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8v4h3l4 3.5v-11L6 8H3z"/><path class="ondes" d="M13 7.5a3.5 3.5 0 0 1 0 5M15.5 5a7 7 0 0 1 0 10"/><path class="muet" d="m13.5 8 4 4m0-4-4 4"/></svg>
+</button>
+
+<button id="suivant" aria-label="Avancer dans la visite">
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#ecd49b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg>
+</button>
+
+<div class="fiche-fond" id="fiche-fond"></div>
+<aside class="fiche" id="fiche" aria-hidden="true" data-lenis-prevent>
+  <div class="fiche-in">
+    <div class="inv" id="f-inv"></div>
+    <h2 id="f-titre"></h2>
+    <div class="m" id="f-meta"></div>
+    <div class="corps" id="f-corps"></div>
+    <button class="btn" id="f-fermer">Fermer</button>
+  </div>
+</aside>
+
+<div class="film" id="film" hidden>
+  <canvas id="film-canvas" width="720" height="1280"></canvas>
+  <video id="film-video" playsinline controls hidden></video>
+  <div class="barre"><i id="film-barre"></i></div>
+  <p class="etat" id="film-etat"></p>
+  <div class="actions">
+    <button class="btn plein" id="film-enregistrer" hidden>Enregistrer la vidéo</button>
+    <button class="btn" id="film-fermer">Fermer</button>
+  </div>
+</div>
+
+<div class="voile-noir" id="voile-noir"></div>
+<div id="charge"><p id="charge-txt">Le musée ouvre ses portes…</p><div class="barre"><i id="charge-barre"></i></div></div>
+
+<script>
+/* ============================================================
+   CONFIG : tout le contenu personnalisable est ici.
+   photo : chemin d'image (ex. "assets/photos/p1.jpg"), ou null pour un visuel d'attente.
+   type  : "photo" | "mot" (œuvre typographique) | "vide" (œuvre à venir)
+   ============================================================ */
+const CONFIG = {
+  prenom: "Maman",
+  nomMusee: "Le Musée Madame Maman",
+  plaque: "MUSÉE MADAME MAMAN",
+  exposition: "Une vie de grâce",
+  dates: "1984 — 2026",
+  age: 42,
+  dateVisite: "28.10.2026",
+  lieuDate: "Paris, le 28 octobre 2026",
+  annonce: "Le 28 octobre 2026, le Musée Madame Maman présente une exposition exceptionnelle, préparée pour une seule invitée d'honneur.",
+  affiche: {
+    photo: "assets/photos/p9.jpg",
+    sur: "Le Musée Madame Maman présente",
+    titre: "Une vie de grâce",
+    sous: "Exposition exceptionnelle",
+    date: "À partir du 28 octobre 2026",
+    pied: "Vernissage privé · Une seule invitée d'honneur"
+  },
+  signature: "Ibrahim",
+  surnom: "Madame Maman",
+  nomComplet: "YOUSSAH NKOUADOU RIANATOU",
+  musique: {
+    visite: "assets/audio/visite.mp3", // « Happy Birthday – Piano Variations », Nesrality : piano d'anniversaire, en boucle pendant la visite
+    gospel: "assets/audio/gospel.mp3", // « Ukholo Lwethu LwaseNgcakini », Vusi Mdleleni : de la deuxième salle jusqu'à la salle de la surprise
+    finale: "assets/audio/finale.mp3", // Haendel, « Hallelujah » : surprise, cadeau, lettre et rideaux
+    credits: "Musiques : « Happy Birthday – Piano Variations » par Nesrality et « Ukholo Lwethu LwaseNgcakini » par Vusi Mdleleni, via Pixabay (Pixabay Content License). G. F. Haendel, Le Messie, « Hallelujah », The National Chorus of Korea (CC BY 3.0), via Wikimedia Commons.",
+    creditFilm: "Musiques : Nesrality · Vusi Mdleleni (Pixabay) · Haendel, The National Chorus of Korea (CC BY 3.0)"
+  },
+  salles: [
+    {
+      num: "Salle I", titre: "La douceur", mur: "#f7f3eb",
+      verset: "« Vous êtes la lumière du monde. »", ref: "Matthieu 5, 14",
+      texte: "Chez nous, la lumière n'a jamais dépendu des fenêtres : elle entrait avec elle. Une voix calme, un geste tendre, un « tu as mangé ? » au bon moment. Avant de raconter sa force, il fallait commencer par là : sa douceur, celle qui nous a tenus.",
+      oeuvres: [
+        { type: "photo", photo: "assets/photos/p6.jpg", titre: "Le regard", date: "Depuis le premier jour", technique: "Photographie, collection privée",
+          cartel: "Le premier visage, le dernier mot du soir.", texte: "Ce regard nous connaît par cœur.\nIl devine la fatigue avant qu'on la dise, la tristesse avant qu'on la cache, et sait quand il faut simplement se taire et rester là. Tout a changé autour de nous ; lui, jamais." },
+        { type: "photo", photo: "assets/photos/p1.jpg", titre: "Bleu de fête", date: "Un jour de célébration", technique: "Tirage numérique, collection privée",
+          cartel: "Elle n'a jamais eu besoin d'occasion pour être belle.", texte: "Quand elle s'habille pour une fête, c'est un peu pour elle et beaucoup pour nous : pour que la journée soit belle, pour qu'on soit fiers.\nElle porte le bleu comme elle porte tout le reste : avec grâce, sans en faire trop." },
+        { type: "photo", photo: "assets/photos/p3.jpg", titre: "Bras ouverts", date: "Chaque retour", technique: "Instantané, joie spontanée",
+          cartel: "« Accueillez-vous les uns les autres. » Romains 15, 7", texte: "On peut arriver en retard, fatigué, avec une mauvaise nouvelle : les bras s'ouvrent quand même.\nElle n'a jamais demandé qu'on mérite son accueil. Chez elle, on est attendu. Toujours." },
+        { type: "photo", photo: "assets/photos/p2.jpg", titre: "Le repos", date: "Un dimanche", technique: "Photographie couleur, collection privée",
+          cartel: "« Venez à moi, je vous procurerai le repos. » Matthieu 11, 28", texte: "Rares sont les photos où elle s'arrête. Celle-ci est précieuse : un fauteuil, un instant rien qu'à elle.\nElle a passé tant d'années à veiller sur le repos des autres qu'on voulait lui rendre celui-ci." }
+      ]
+    },
+    {
+      num: "Salle II", titre: "La femme forte", mur: "#f6f1e6",
+      verset: "« Une femme vaillante, qui la trouvera ? Elle a bien plus de prix que les perles. »", ref: "Proverbes 31, 10",
+      texte: "Que personne ne se trompe sur sa douceur : elle n'a jamais été de la faiblesse. Quand il a fallu tenir, elle a tenu. Elle sait dire non, recadrer, ne rien lâcher, parce qu'elle voit plus loin que le moment. Un caractère dur comme un rempart, et ce rempart, c'est nous qu'il protège.",
+      oeuvres: [
+        { type: "photo", photo: "assets/photos/p4.jpg", titre: "Force et dignité", date: "Signature permanente", technique: "Photographie, reflets et lumière",
+          cartel: "« Force et dignité sont son vêtement. » Proverbes 31, 25", texte: "Tout de blanc vêtue, la tête haute.\nElle a traversé des saisons difficiles sans jamais nous les faire porter. Cette dignité, personne ne la lui a apprise : c'est sa façon de se tenir debout." },
+        { type: "mot", mot: "Foi", titre: "Foi", date: "Depuis toujours", technique: "Prière quotidienne, confiance inébranlable",
+          cartel: "« Heureuse celle qui a cru. » Luc 1, 45", texte: "Quand elle ne savait plus quoi faire, elle priait. Quand tout allait bien, elle remerciait.\nSa foi ne s'est pas montrée dans de grands discours, mais dans des genoux pliés, la nuit, pour chacun de nous." },
+        { type: "photo", photo: "assets/photos/p7.jpg", titre: "L'attention", date: "Chaque jour", technique: "Photographie couleur, collection privée",
+          cartel: "Toujours un message pour l'un de nous.", texte: "Même débordée, même loin, elle trouve le temps de prendre des nouvelles.\n« Tu es bien rentré ? » Quatre mots, et tout l'amour qu'elle ne prend pas le temps d'expliquer." },
+        { type: "mot", mot: "Patience", titre: "Patience", date: "Œuvre continue", technique: "Matériau rare, inépuisable",
+          cartel: "« L'amour prend patience. » 1 Corinthiens 13, 4", texte: "Répéter, attendre, pardonner, recommencer. Hausser le ton parfois, parce qu'elle tenait à ce qu'on devienne quelqu'un de bien.\nMais abandonner, jamais. Avec moi, surtout." }
+      ]
+    },
+    {
+      num: "Salle III", titre: "Ce que tu construis", mur: "#f8f4ed",
+      verset: "« Ses enfants se lèvent et la disent bienheureuse. »", ref: "Proverbes 31, 28",
+      texte: "Tout ce qu'elle a donné ne s'est pas perdu : ça vit dans nos rires, nos prières, notre manière d'aimer. Cette dernière salle n'est pas une fin. C'est la suite qu'elle a rendue possible.",
+      oeuvres: [
+        { type: "photo", photo: "assets/photos/p8.jpg", titre: "Une même foi", date: "Génération après génération", technique: "Selfie, joie partagée",
+          cartel: "Ce qu'elle a reçu, elle le transmet.", texte: "Deux sourires dans le même cadre.\nCe qu'elle nous laisse de plus précieux ne tient pas dans une valise : une joie qui ne dépend pas des circonstances, et une confiance en Dieu qu'on a vue de nos propres yeux." },
+        { type: "photo", photo: "assets/photos/p5.jpg", titre: "Le chemin", date: "2027", technique: "Projet, encre et espérance",
+          cartel: "« Le Seigneur gardera tes départs et tes arrivées. » Psaume 121, 8", texte: "La valise est prête, le sourire aussi.\nElle est souvent partie pour les autres. Le prochain voyage, on veut qu'il soit pour elle." },
+        { type: "mot", mot: "Du temps pour toi", titre: "Du temps pour toi", date: "À partir d'aujourd'hui", technique: "Repos, rires et douceur",
+          cartel: "Une œuvre que tu mérites depuis longtemps.", texte: "Pour tes 42 ans, pas un objet : du repos, des rires, et des journées où personne n'a besoin de toi, sauf pour te dire merci.\nTu as tant donné. Cette année, reçois." },
+        { type: "vide", titre: "Les années à venir", date: "En cours", technique: "Œuvre collective, sous le regard de Dieu",
+          cartel: "« Je connais les projets que j'ai formés pour vous : un avenir et une espérance. » Jérémie 29, 11", texte: "Le cadre est prêt. Ce qu'on y mettra, on l'écrira ensemble, jour après jour." }
+      ]
+    }
+  ],
+  // Couleurs PROVISOIRES : à remplacer par les 3 coloris officiels du pagne du Ngouon 2026
+  // (3 teintes par pagne : fond, motif, rehaut).
+  pagne: {
+    salle: "Le pagne du Ngouon",
+    question: "Choisis ton pagne pour le Ngouon 2026",
+    choix: [
+      { nom: "Pourpre royal", couleurs: ["#4b1d5e", "#d8ad3c", "#f4ead6"] },
+      { nom: "Rouge Foumban", couleurs: ["#9b2a1f", "#1d1a17", "#e9c46a"] },
+      { nom: "Indigo", couleurs: ["#1f3a5f", "#c99a2e", "#f1e8d6"] }
+    ]
+  },
+  film: {
+    photos: ["assets/photos/p9.jpg", "assets/photos/p10.jpg", "assets/photos/p13.jpg", "assets/photos/p15.jpg", "assets/photos/p17.jpg",
+      "assets/photos/p18.jpg", "assets/photos/p12.jpg", "assets/photos/p14.jpg", "assets/photos/p11.jpg"],
+    mots: ["Lumière", "Joie", "Liberté", "Éclat", "Grâce", "Fête"],
+    famille: "Une famille,\nune foi.",
+    verset: "« Dieu est au milieu d'elle : elle n'est point ébranlée. »",
+    ref: "Psaume 46, 6"
+  },
+  lettreTitre: "Joyeux anniversaire, Maman",
+  lettre: "Maman,\n\nJ'ai voulu te construire un musée, parce que je ne savais pas comment te dire tout ça autrement.\n\nToute ma vie, je t'ai vue faire deux choses à la fois : être douce et être forte. Tu nous prenais dans tes bras le soir, et le lendemain tu tenais tête au monde entier pour nous. Je n'ai pas toujours compris tes « non », tes exigences, ta voix ferme. Aujourd'hui je sais : c'était de l'amour qui voyait plus loin que moi.\n\nTu as toujours été là. Dans les jours faciles, et dans ceux où tout était lourd, sans jamais laisser ce poids tomber sur nous. Si je sais prier, aimer et me relever, c'est parce que je t'ai regardée faire.\n\nPour tes 42 ans, je te souhaite de recevoir enfin un peu de tout ce que tu as donné.\n\n« Que le Seigneur te bénisse et te garde ! Qu'il fasse briller sur toi son visage et t'accorde sa grâce ! Qu'il te découvre sa face et te donne la paix ! »\nNombres 6, 24-26\n\nJoyeux anniversaire. Je t'aime."
+};
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const $ = (s) => document.querySelector(s);
+const C = CONFIG, P = C.pagne;
+const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lisse = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+history.scrollRestoration = "manual";
+
+/* ---------- Textes statiques ---------- */
+document.querySelectorAll("[data-c]").forEach((el) => { el.textContent = C[el.dataset.c] ?? ""; });
+
+/* ---------- Visuels d'attente (remplacés par les vraies photos) ---------- */
+function hasard(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+function attente(seed) {
+  const c = document.createElement("canvas"); c.width = 640; c.height = 800;
+  const x = c.getContext("2d"), r = hasard(seed * 7919 + 11);
+  const tons = [["#d9b98a", "#8a5a3c", "#3d2a24"], ["#c9c2a8", "#6b7a6a", "#2b3330"], ["#e3c7b0", "#a0605a", "#40252a"], ["#bcc6cf", "#5d6f85", "#232c3a"]][seed % 4];
+  x.fillStyle = tons[2]; x.fillRect(0, 0, 640, 800);
+  for (let i = 0; i < 8; i++) {
+    const px = r() * 640, py = r() * 800, g = x.createRadialGradient(px, py, 0, px, py, 180 + r() * 360);
+    g.addColorStop(0, tons[i % 2] + "d0"); g.addColorStop(1, tons[i % 2] + "00");
+    x.fillStyle = g; x.fillRect(0, 0, 640, 800);
+  }
+  const d = x.getImageData(0, 0, 640, 800);
+  for (let i = 0; i < d.data.length; i += 4) { const n = (r() - .5) * 26; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; }
+  x.putImageData(d, 0, 0);
+  return c.toDataURL("image/jpeg", .86);
+}
+
+/* ---------- Numérotation et sources d'images ---------- */
+let n = 0;
+C.salles.forEach((s) => s.oeuvres.forEach((o) => {
+  o.inv = "nº " + String(++n).padStart(2, "0");
+  if (o.type === "photo") { o.exemple = !o.photo; o.src = o.photo || attente(n); }
+}));
+P.choix.forEach((p, i) => { p.type = "pagne"; p.i = i; });
+
+/* ---------- Choix du pagne (mémorisé sur le téléphone) ---------- */
+const CLE_PAGNE = "musee-maman-pagne";
+let choix = null, surChoix = null;
+try { const v = localStorage.getItem(CLE_PAGNE); if (v !== null && P.choix[+v]) choix = +v; } catch (_) {}
+function choisirPagne(i) {
+  choix = i;
+  try { localStorage.setItem(CLE_PAGNE, String(i)); } catch (_) {}
+  document.querySelectorAll(".pagne").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
+  const r = $("#pagne-r"), env = $(".pagne-env");
+  if (r) r.textContent = `Ton choix : ${P.choix[i].nom}. Il sera prêt pour le Ngouon 2026.`;
+  if (env) {
+    env.href = "https://wa.me/?text=" + encodeURIComponent(`Mon choix de pagne pour le Ngouon 2026 : ${P.choix[i].nom}.`);
+    env.hidden = false;
+  }
+  surChoix?.(i);
+}
+
+/* ---------- Musique : douce pendant la visite, religieuse au cinéma ---------- */
+const piste = (src, boucle) => { if (!src) return null; const a = new Audio(src); a.loop = boucle; a.volume = 0; a.preload = "auto"; return a; };
+const musV = piste(C.musique?.visite, true), musG = piste(C.musique?.gospel, true), musF = piste(C.musique?.finale, true);
+// une musique par poste : piano d'anniversaire à l'entrée et en première salle, gospel ensuite, Haendel de l'annonce de la surprise jusqu'aux rideaux
+const pistes = [musV, musG, musF], VOLS = [.45, .4, .6];
+let muet = false, arme = false, enCours = -1;
+function fonduVol(a, v, d = 1.2) {
+  if (!a) return;
+  gsap.killTweensOf(a);
+  gsap.to(a, { volume: v, duration: d, ease: "sine.inOut", onComplete: () => { if (v === 0) a.pause(); } });
+}
+function ambiance(i) {
+  if (!arme || enFilm || i === enCours) return;
+  enCours = i;
+  pistes.forEach((a, k) => {
+    if (!a) return;
+    if (k === i) { if (a.paused) { if (k === 2) a.currentTime = 0; a.play().catch((er) => { if (er?.name === "NotAllowedError") refuse(); }); } fonduVol(a, VOLS[k], 2.5); }
+    else if (!a.paused) fonduVol(a, 0, 2);
+  });
+}
+function jouer(e) {
+  if (arme || e?.target?.closest?.("#son, #s-cinema")) return;
+  arme = true;
+  // débloque les trois pistes dans le geste (iOS), puis lance celle du poste
+  pistes.forEach((a) => a?.play().then(() => { if (pistes.indexOf(a) !== enCours) a.pause(); }).catch(() => {}));
+  ambiance(posteMusique);
+}
+let posteMusique = 0, ecouteGeste = false;
+const GESTES = ["pointerdown", "touchstart", "keydown", "wheel"];
+addEventListener("pointerdown", jouer, { passive: true });
+// lancement sans clic dès la fin du chargement ; si le navigateur refuse, le premier geste (toucher, clavier, molette) démarre la musique
+function refuse() {
+  if (!arme) return;
+  arme = false; enCours = -1;
+  pistes.forEach((a) => { if (a) { gsap.killTweensOf(a); a.volume = 0; a.pause(); } });
+  attendreGeste();
+}
+function attendreGeste() {
+  if (ecouteGeste) return;
+  ecouteGeste = true;
+  const go = (e) => { GESTES.forEach((g) => removeEventListener(g, go, true)); ecouteGeste = false; jouer(e); };
+  GESTES.forEach((g) => addEventListener(g, go, { passive: true, capture: true }));
+}
+function musiqueAuto() { arme = true; ambiance(posteMusique); attendreGeste(); }
+$("#son").onclick = () => {
+  if (!arme) { arme = true; ambiance(posteMusique); return; }
+  muet = !muet;
+  pistes.forEach((a) => { if (a) a.muted = muet; });
+  $("#son").classList.toggle("coupe", muet); $("#son").setAttribute("aria-pressed", String(muet));
+  $("#son").setAttribute("aria-label", muet ? "Remettre la musique" : "Couper la musique");
+};
+
+/* ---------- Fiche ---------- */
+let lenis = null, enFilm = false;
+function cartelHTML(o) {
+  return `<span class="inv">${o.inv} · ${esc(o.date)}</span><span class="t">${esc(o.titre)}</span><span class="m">${esc(o.cartel)}</span><span class="lire">Lire le cartel</span>`;
+}
+function ouvrirFiche(o) {
+  $("#f-inv").textContent = `Inv. ${o.inv}`; $("#f-titre").textContent = o.titre;
+  $("#f-meta").textContent = `${o.date} · ${o.technique}`; $("#f-corps").textContent = o.texte;
+  $("#fiche").classList.add("on"); $("#fiche-fond").classList.add("on"); $("#fiche").setAttribute("aria-hidden", "false");
+  $("#f-fermer").focus({ preventScroll: true });
+  lenis?.stop();
+}
+function fermerFiche() {
+  if (!$("#fiche").classList.contains("on")) return;
+  $("#fiche").classList.remove("on"); $("#fiche-fond").classList.remove("on"); $("#fiche").setAttribute("aria-hidden", "true");
+  if (!enFilm) lenis?.start();
+}
+$("#f-fermer").onclick = fermerFiche; $("#fiche-fond").onclick = fermerFiche;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fermerFiche(); });
+
+/* ---------- Parcours : une clé par arrêt de caméra ---------- */
+// [maintien au défilement, durée dans le film] ; MOVE = trajet entre deux arrêts
+const DUREES = { facade: [1.3, 3.5], porte: [1.6, 3], salle: [1, 3], oeuvre: [1, 3.2], final: [4.2, 7.5], grue: [.8, 3], affiche: [1.4, 3.5] };
+const MOVE = 2.6;
+const keys = [];
+const cle = (k, extra) => keys.push({ k, hold: DUREES[k][0], film: DUREES[k][1], ...extra });
+cle("facade"); cle("affiche"); cle("porte");
+C.salles.forEach((s, r) => { cle("salle", { s, r }); s.oeuvres.forEach((o, j) => cle("oeuvre", { s, r, o, j })); });
+cle("final"); cle("grue");
+let acc = 0;
+keys.forEach((K, i) => { if (i) acc += MOVE; K.a = acc; acc += K.hold; K.b = acc; });
+const T = acc, DER = keys.length - 1;
+const kPorte = keys.find((K) => K.k === "porte"), kFinal = keys[DER - 1];
+// seuils musicaux : gospel en approchant la deuxième salle, Haendel juste avant l'annonce de la surprise
+const S_GOSPEL = (keys.find((K) => K.k === "salle" && K.r === 1)?.a ?? T) - MOVE * .5, S_HAENDEL = kFinal.a - MOVE * .6;
+const pisteDe = (s) => (s >= S_HAENDEL ? 2 : s >= S_GOSPEL ? 1 : 0);
+
+function progres(s) {
+  for (let i = 0; i <= DER; i++) {
+    const K = keys[i];
+    if (s <= K.b) {
+      if (s >= K.a || i === 0) return { u: i, i, h: clamp((s - K.a) / K.hold) };
+      return { u: i - 1 + lisse(clamp((s - keys[i - 1].b) / MOVE)), i: -1, h: 0 };
+    }
+  }
+  return { u: DER, i: DER, h: 1 };
+}
+// visite guidée : chaque trajet dure TRAJET secondes, chaque arrêt sa durée « film »
+const TRAJET = 3.4;
+function avancer(s, dt) {
+  for (const K of keys) if (s < K.b) return s + dt * (s < K.a ? MOVE / TRAJET : K.hold / K.film);
+  return s + dt;
+}
+const duree = (sFin) => keys.reduce((d, K, i) => d + (i ? clamp((sFin - (K.a - MOVE)) / MOVE) * TRAJET : 0) + clamp((sFin - K.a) / K.hold) * K.film, 0);
+// opacité d'une carte : fondu doux à l'approche et au départ de l'arrêt
+function opacite(K, i, s) {
+  const inn = i === 0 ? 1 : lisse(clamp((s - (K.a - .8)) / .75)), out = i === DER ? 1 : lisse(clamp(((K.b + .8) - s) / .75));
+  return Math.min(inn, out);
+}
+let moteur = null;
+
+/* ---------- Calques de texte ---------- */
+function calque(K) {
+  const d = document.createElement("div"); d.className = "calque";
+  if (K.k === "facade") {
+    d.classList.add("hb");
+    const titre = C.nomMusee.split(" ").map((m) => `<span class="mot">${[...m].map((l) => `<span class="l">${esc(l)}</span>`).join("")}</span>`).join(" ");
+    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">${esc(C.affiche.sous)}</span><h1 class="titre-musee">${titre}</h1><p class="expo">${esc(C.exposition)}</p><span class="dates">${esc(C.dateVisite)}</span></div>
+      <div class="bloc" data-z="2"><p class="annonce">${esc(C.annonce)}</p><button class="visite-auto" id="visite-auto">Lancer la visite guidée</button><span class="indice pulse">ou fais défiler à ton rythme</span></div>`;
+  } else if (K.k === "affiche") {
+    d.classList.add("ht");
+    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">À l'affiche</span></div>`;
+  } else if (K.k === "porte") {
+    d.innerHTML = `<div class="bloc" data-z="1.5"><span class="sur">Bienvenue</span><h2 class="grand">Entrez, ${esc(C.prenom)}</h2><p class="texte">Ouvert tous les jours, pour une seule visiteuse.</p></div>`;
+  } else if (K.k === "salle") {
+    d.innerHTML = `<div class="bloc" data-z="1.5"><span class="sur">${esc(K.s.num)}</span><h2 class="grand">${esc(K.s.titre)}</h2><p class="verset">${esc(K.s.verset)}<span class="ref">${esc(K.s.ref)}</span></p></div>`;
+  } else if (K.k === "oeuvre") {
+    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">${esc(K.s.num)} · ${K.j + 1}/${K.s.oeuvres.length}</span><button class="cartel" aria-label="Lire le cartel : ${esc(K.o.titre)}">${cartelHTML(K.o)}</button></div>`;
+  } else if (K.k === "final") {
+    d.classList.add("hb");
+    const btns = P.choix.map((p, i) => `<button class="pagne" data-i="${i}" aria-pressed="${choix === i}"><span class="nuancier">${p.couleurs.map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(p.nom)}</button>`).join("");
+    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">Salle ${C.age}</span><span class="titre-salle">La surprise</span></div>
+      <div class="final-grille"><div class="bloc avant"><span class="sur">Un dernier secret</span><h2 class="grand suspense">Es-tu prête à découvrir le cadeau que j'ai prévu pour toi<span class="pts"><i>.</i><i>.</i><i>.</i></span> ?</h2><span class="indice pulse">Continue de défiler, tout doucement…</span></div>
+      <div class="bloc apres" data-z="1"><p class="pagne-q">${esc(P.question)}</p><div class="pagnes">${btns}</div>
+      <p class="pagne-r" id="pagne-r" aria-live="polite">${choix === null ? "Touche un pagne pour le choisir." : `Ton choix : ${esc(P.choix[choix].nom)}. Il sera prêt pour le Ngouon 2026.`}</p>
+      <a class="pagne-env" target="_blank" rel="noopener" hidden>Envoyer mon choix</a></div></div>`;
+    d.querySelectorAll(".pagne").forEach((b) => b.addEventListener("click", () => choisirPagne(+b.dataset.i)));
+    K.avant = d.querySelector(".avant"); K.apres = d.querySelector(".apres"); K.nom = d.querySelector(".titre-salle");
+  } else {
+    d.innerHTML = `<div class="bloc" data-z="1.5"><p class="annonce">Il reste un mot de l'artiste.</p><span class="indice pulse">Continue de défiler</span></div>`;
+  }
+  d.querySelector(".cartel")?.addEventListener("click", () => ouvrirFiche(K.o));
+  K.el = d; K.op = -1; K.z = [...d.querySelectorAll("[data-z]")].map((e) => [e, +e.dataset.z]);
+  $("#calques").append(d);
+}
+keys.forEach(calque);
+
+/* ---------- Dessin canvas (textures et film) ---------- */
+const W = 720, H = 1280;
+function lignes(x, txt, maxW) {
+  const out = [];
+  String(txt).split("\n").forEach((par) => {
+    let l = "";
+    par.split(" ").forEach((m) => { const t = l ? l + " " + m : m; if (x.measureText(t).width > maxW && l) { out.push(l); l = m; } else l = t; });
+    out.push(l);
+  });
+  return out;
+}
+function texte(x, txt, cx, y, maxW, lh) { lignes(x, txt, maxW).forEach((l, i) => x.fillText(l, cx, y + i * lh)); }
+// réduit la police jusqu'à ce que le texte espacé tienne dans « max »
+function ajuste(x, txt, max, px, sp, pol) {
+  for (; px > 10; px -= 2) { x.font = pol(px); const l = [...txt].reduce((a, c) => a + x.measureText(c).width, 0) + sp * ([...txt].length - 1); if (l <= max) break; }
+}
+function espace(x, txt, cx, y, sp) {
+  const ch = [...txt], ws = ch.map((c) => x.measureText(c).width), tot = ws.reduce((a, b) => a + b, 0) + sp * (ch.length - 1);
+  let px = cx - tot / 2; x.save(); x.textAlign = "left";
+  ch.forEach((c, i) => { x.fillText(c, px, y); px += ws[i] + sp; }); x.restore();
+}
+function cartelCanvas(x, o, a) {
+  x.save(); x.globalAlpha = a;
+  const cw = 460, ch = 170, cx = W / 2 - cw / 2, cy = 960;
+  x.fillStyle = "#f2ebdc"; x.fillRect(cx, cy, cw, ch);
+  x.textAlign = "left"; x.fillStyle = "#8a7660"; x.font = "500 19px 'Hanken Grotesk', Arial, sans-serif";
+  x.fillText(`${o.inv} · ${o.date}`, cx + 24, cy + 38);
+  x.fillStyle = "#2b241d"; x.font = "italic 34px 'Bodoni Moda', Georgia, serif"; x.fillText(o.titre, cx + 24, cy + 84, cw - 48);
+  x.fillStyle = "#5d4f40"; x.font = "400 21px 'Hanken Grotesk', Arial, sans-serif"; texte(x, o.cartel, cx + 24, cy + 122, cw - 48, 28);
+  x.restore();
+}
+const toile2d = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d")]; };
+const chargerImage = (src) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+function bruit(x, w, h, amp, r) {
+  const d = x.getImageData(0, 0, w, h);
+  for (let i = 0; i < d.data.length; i += 4) { const v = (r() - .5) * amp; d.data[i] += v; d.data[i + 1] += v; d.data[i + 2] += v; }
+  x.putImageData(d, 0, 0);
+}
+
+/* ---------- Démarrage ---------- */
+demarrer().catch((e) => { console.error(e); $("#charge-txt").textContent = "Ton navigateur n'affiche pas la 3D. Ouvre le musée dans Safari ou Chrome à jour."; });
+
+async function demarrer() {
+  await Promise.race([
+    Promise.all(["500 64px 'Bodoni Moda'", "italic 64px 'Bodoni Moda'", "500 20px 'Hanken Grotesk'", "400 20px 'Hanken Grotesk'"].map((f) => document.fonts.load(f))),
+    attendre(2500)
+  ]).catch(() => {});
+  const barreCharge = $("#charge-barre"); barreCharge.style.width = "20%";
+
+  const canvas = $("#gl");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  let haute = true, manuel = false, pr = Math.min(devicePixelRatio, 1.75);
+  renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false);
+
+  const scene = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, .05, 140);
+  const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const anis = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const tex = (c, rep) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anis; if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+  // UV en mètres : une tuile de texture couvre « tuile » mètres, quelle que soit la taille du panneau
+  const uvEchelle = (g, sx, sy = sx) => { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy); return g; };
+  const panneau = (w, h, tuile) => uvEchelle(new THREE.PlaneGeometry(w, h), w / tuile, h / tuile);
+  let germe = 42; const alea = () => (germe = (germe * 16807) % 2147483647) / 2147483647;
+  const OR = "#94723a", SERIF = "'Bodoni Moda', Georgia, serif", SANS = "'Hanken Grotesk', Arial, sans-serif";
+
+  /* textures dessinées */
+  function texCiel() {
+    const [c, x] = toile2d(16, 512), g = x.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, "#c4d6e4"); g.addColorStop(.6, "#e8eef1"); g.addColorStop(1, "#f8f0e3");
+    x.fillStyle = g; x.fillRect(0, 0, 16, 512);
+    return c;
+  }
+  function texNuit() {
+    const [c, x] = toile2d(16, 512), g = x.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, "#01030b"); g.addColorStop(.45, "#050b21"); g.addColorStop(.8, "#0c1a40"); g.addColorStop(1, "#18295c");
+    x.fillStyle = g; x.fillRect(0, 0, 16, 512);
+    return c;
+  }
+  function texMarbre() {
+    const [c, x] = toile2d(1024, 1024);
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+      const t = 245 + Math.round(alea() * 6 - 3);
+      x.fillStyle = `rgb(${t},${t - 3},${t - 8})`; x.fillRect(i * 512, j * 512, 512, 512);
+      x.save(); x.beginPath(); x.rect(i * 512, j * 512, 512, 512); x.clip();
+      for (let v = 0; v < 8; v++) {
+        x.strokeStyle = `rgba(148,138,126,${.05 + alea() * .13})`; x.lineWidth = .8 + alea() * 2.6;
+        let px = i * 512 + alea() * 512, py = j * 512 - 20; x.beginPath(); x.moveTo(px, py);
+        while (py < j * 512 + 540) { px += (alea() - .4) * 70; py += 18 + alea() * 34; x.lineTo(px, py); }
+        x.stroke();
+      }
+      x.restore();
+    }
+    x.strokeStyle = "rgba(200,168,108,.95)"; x.lineWidth = 4; // joints dorés
+    [0, 512, 1024].forEach((p) => { x.beginPath(); x.moveTo(p, 0); x.lineTo(p, 1024); x.moveTo(0, p); x.lineTo(1024, p); x.stroke(); });
+    return c;
+  }
+  function texDallage() {
+    const [c, x] = toile2d(512, 512);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      const t = 234 + Math.round(alea() * 9); x.fillStyle = `rgb(${t},${t - 4},${t - 11})`; x.fillRect(i * 128, j * 128, 128, 128);
+    }
+    x.strokeStyle = "rgba(160,146,124,.5)"; x.lineWidth = 2;
+    for (let p = 0; p <= 512; p += 128) { x.beginPath(); x.moveTo(p, 0); x.lineTo(p, 512); x.moveTo(0, p); x.lineTo(512, p); x.stroke(); }
+    return c;
+  }
+  function texTapis() {
+    const [c, x] = toile2d(256, 256);
+    x.fillStyle = "#f5efe4"; x.fillRect(0, 0, 256, 256);
+    x.fillStyle = "#cfae6c"; x.fillRect(10, 0, 10, 256); x.fillRect(236, 0, 10, 256); x.fillRect(28, 0, 3, 256); x.fillRect(225, 0, 3, 256);
+    return c;
+  }
+  function texOmbre() {
+    const [c, x] = toile2d(256, 256);
+    x.shadowColor = "rgba(0,0,0,.9)"; x.shadowBlur = 40; x.fillStyle = "#000"; x.fillRect(56, 56, 144, 144);
+    return c;
+  }
+  function texPlaque() {
+    const [c, x] = toile2d(1024, 256);
+    // plaque sombre cerclée d'or : lettres claires bien lisibles sur la façade ivoire
+    x.fillStyle = "#2b241d"; x.fillRect(0, 0, 1024, 256);
+    x.strokeStyle = "#c7a25a"; x.lineWidth = 8; x.strokeRect(8, 8, 1008, 240); x.lineWidth = 2; x.strokeRect(24, 24, 976, 208);
+    x.fillStyle = "#ecd49b"; ajuste(x, C.plaque, 900, 100, 14, (px) => `500 ${px}px ${SERIF}`); espace(x, C.plaque, 512, 140, 14);
+    x.fillStyle = "#fbf7ef"; x.font = `500 34px ${SANS}`; espace(x, `${C.dateVisite}  ·  ${C.dates}`, 512, 206, 8);
+    return c;
+  }
+  function texEtiquette(t) {
+    const [c, x] = toile2d(512, 128);
+    x.fillStyle = "#8f6d30"; x.font = `500 64px ${SERIF}`; espace(x, t, 256, 86, 14);
+    return c;
+  }
+  function croix(x, cx, cy, h) { x.fillRect(cx - h * .065, cy - h / 2, h * .13, h); x.fillRect(cx - h * .33, cy - h * .22, h * .66, h * .13); }
+  function texBanniere() {
+    const [c, x] = toile2d(512, 1664);
+    x.fillStyle = "#fbf7ef"; x.fillRect(0, 0, 512, 1664);
+    x.strokeStyle = OR; x.lineWidth = 6; x.strokeRect(26, 26, 460, 1612); x.lineWidth = 2; x.strokeRect(44, 44, 424, 1576);
+    x.textAlign = "center"; x.fillStyle = OR; ajuste(x, C.plaque, 400, 30, 6, (px) => `500 ${px}px ${SANS}`); espace(x, C.plaque, 256, 170, 6);
+    croix(x, 256, 310, 110);
+    x.fillStyle = "#2b241d"; x.font = `italic 112px ${SERIF}`;
+    const n = lignes(x, C.exposition, 400).length; texte(x, C.exposition, 256, 820 - (n - 1) * 70, 400, 140);
+    x.fillStyle = OR; x.fillRect(196, 1290, 120, 3);
+    x.font = `500 34px ${SANS}`; espace(x, C.dateVisite, 256, 1480, 6);
+    return c;
+  }
+  function texAffiche(img) {
+    const A = C.affiche, [c, x] = toile2d(1024, 1536);
+    x.fillStyle = "#fbf8f2"; x.fillRect(0, 0, 1024, 1536);
+    x.strokeStyle = OR; x.lineWidth = 6; x.strokeRect(34, 34, 956, 1468); x.lineWidth = 2; x.strokeRect(52, 52, 920, 1432);
+    x.textAlign = "center"; x.fillStyle = OR; x.font = `500 28px ${SANS}`; espace(x, A.sur.toUpperCase(), 512, 132, 7);
+    const ax = 160, aw = 704, ay = 176, ah = 820, r = aw / 2;
+    const arche = () => { x.beginPath(); x.moveTo(ax, ay + ah); x.lineTo(ax, ay + r); x.arc(512, ay + r, r, Math.PI, 0); x.lineTo(ax + aw, ay + ah); x.closePath(); };
+    x.save(); arche(); x.fillStyle = "#ebe4d6"; x.fill(); x.clip();
+    if (img) { const k = Math.max(aw / img.width, ah / img.height); x.drawImage(img, 512 - img.width * k / 2, ay + (ah - img.height * k) * .3, img.width * k, img.height * k); }
+    x.restore(); arche(); x.strokeStyle = OR; x.lineWidth = 5; x.stroke();
+    x.fillStyle = "#2b241d"; x.font = `italic 100px ${SERIF}`; x.fillText(A.titre, 512, 1128, 900);
+    x.fillStyle = OR; x.font = `500 26px ${SANS}`; espace(x, A.sous.toUpperCase(), 512, 1192, 8);
+    x.fillRect(382, 1236, 100, 2); x.fillRect(542, 1236, 100, 2);
+    x.save(); x.translate(512, 1237); x.rotate(Math.PI / 4); x.fillRect(-7, -7, 14, 14); x.restore();
+    x.fillStyle = "#2b241d"; x.font = `500 46px ${SERIF}`; x.fillText(A.date, 512, 1320, 900);
+    x.fillStyle = "#7d6a55"; x.font = `400 26px ${SANS}`; x.fillText(A.pied, 512, 1420, 900);
+    return c;
+  }
+  function texToile(o, img) {
+    const [c, x] = toile2d(768, 1024);
+    if (o.type === "pagne") motifPagne(x, o.couleurs, 768, 1024, 128);
+    else if (o.type === "photo") {
+      x.fillStyle = "#ece6da"; x.fillRect(0, 0, 768, 1024);
+      if (img) { const r = Math.max(768 / img.width, 1024 / img.height); x.drawImage(img, (768 - img.width * r) / 2, (1024 - img.height * r) / 2, img.width * r, img.height * r); }
+      if (o.exemple) {
+        x.fillStyle = "rgba(0,0,0,.55)"; x.fillRect(28, 28, 214, 50);
+        x.fillStyle = "#fff"; x.font = `500 26px ${SANS}`; x.fillText("Photo à venir", 46, 62);
+      }
+    } else if (o.type === "mot") {
+      x.fillStyle = "#fbf8f2"; x.fillRect(0, 0, 768, 1024);
+      x.strokeStyle = OR; x.lineWidth = 3; x.strokeRect(54, 54, 660, 916);
+      x.fillStyle = OR; x.textAlign = "center"; croix(x, 384, 200, 70);
+      x.fillStyle = "#2b241d"; x.font = `italic 124px ${SERIF}`;
+      const ls = lignes(x, o.mot, 620); texte(x, o.mot, 384, 560 - (ls.length - 1) * 68, 620, 136);
+    } else {
+      x.fillStyle = "#fbf8f2"; x.fillRect(0, 0, 768, 1024);
+      x.setLineDash([18, 14]); x.strokeStyle = "rgba(184,145,76,.55)"; x.lineWidth = 3; x.strokeRect(70, 70, 628, 884);
+      x.fillStyle = "#8a7660"; x.textAlign = "center"; x.font = `400 36px ${SANS}`; x.fillText("Œuvre en cours", 384, 525);
+    }
+    return c;
+  }
+  barreCharge.style.width = "40%";
+
+  /* matériaux : laque ivoire, marbre blanc, pierre claire, or pâle */
+  scene.background = tex(texCiel());
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
+  const murs = [...C.salles.map((s) => s.mur), "#efe5d2"]; // salles I à III, salle d'honneur
+  const matMur = murs.map((hex) => new THREE.MeshStandardMaterial({ color: hex, roughness: .62, envMapIntensity: .55 }));
+  const blanc = new THREE.MeshStandardMaterial({ color: 0xf7f3ec, roughness: .4, envMapIntensity: .7 });
+  const pierre = new THREE.MeshStandardMaterial({ color: 0xf3eee5, roughness: .62, envMapIntensity: .6 });
+  const niche = new THREE.MeshStandardMaterial({ color: 0xe6dfd2, roughness: .7, envMapIntensity: .5 });
+  const sol = new THREE.MeshStandardMaterial({ map: tex(texMarbre(), true), roughness: .2, envMapIntensity: .9 });
+  const or = new THREE.MeshStandardMaterial({ color: 0xe8d09c, metalness: .72, roughness: .3, envMapIntensity: 1.3 });
+  const orPale = new THREE.MeshStandardMaterial({ color: 0xdcc08a, metalness: .7, roughness: .36, envMapIntensity: 1.3 });
+  const laiton = new THREE.MeshStandardMaterial({ color: 0xe2c690, metalness: .75, roughness: .26, envMapIntensity: 1.3 });
+  const laque = new THREE.MeshStandardMaterial({ color: 0xf6f1e7, roughness: .32, envMapIntensity: .8 });
+  const passe = new THREE.MeshStandardMaterial({ color: 0xfbf9f4, roughness: .95, envMapIntensity: .45 });
+  const feuillage = new THREE.MeshStandardMaterial({ color: 0x4f6a45, roughness: .92 });
+  const cordon = new THREE.MeshStandardMaterial({ color: 0xead9b0, metalness: .25, roughness: .5 });
+  const soie = new THREE.MeshPhysicalMaterial({ color: 0xf4ecdd, roughness: .55, sheen: 1, sheenColor: new THREE.Color(0xf6d9a2), sheenRoughness: .35, side: THREE.DoubleSide, envMapIntensity: .6, emissive: 0x6e6352 });
+  const metal = (map) => new THREE.MeshStandardMaterial({ map: tex(map), transparent: true, depthWrite: false, metalness: .7, roughness: .3 });
+  const add = (o, x = 0, y = 0, z = 0, parent = scene) => { o.position.set(x, y, z); parent.add(o); return o; };
+  const boite = (w, h, d, m, x, y, z, parent) => add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m), x, y, z, parent);
+
+  /* formes */
+  function formePorte(demi, yc, larg, haut) {
+    const s = new THREE.Shape();
+    s.moveTo(-larg, 0); s.lineTo(-demi, 0); s.lineTo(-demi, yc); s.absarc(0, yc, demi, Math.PI, 0, true);
+    s.lineTo(demi, 0); s.lineTo(larg, 0); s.lineTo(larg, haut); s.lineTo(-larg, haut); s.closePath();
+    return s;
+  }
+  function arcBand(ri, re, yc) {
+    const s = new THREE.Shape();
+    s.moveTo(-re, 0); s.lineTo(-re, yc); s.absarc(0, yc, re, Math.PI, 0, true); s.lineTo(re, 0); s.lineTo(ri, 0);
+    s.lineTo(ri, yc); s.absarc(0, yc, ri, 0, Math.PI, false); s.lineTo(-ri, 0); s.closePath();
+    return s;
+  }
+  const extruder = (forme, prof, bev = .012) => new THREE.ExtrudeGeometry(forme, { depth: prof, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 24 });
+
+  /* intérieur : quatre salles de 12 m, de z 0 à z -48 */
+  const plancher = add(new THREE.Mesh(panneau(8, 48, 2), sol), 0, 0, -24); plancher.rotation.x = -Math.PI / 2;
+  const plafond = add(new THREE.Mesh(new THREE.PlaneGeometry(8, 48), new THREE.MeshStandardMaterial({ color: 0xfaf7f1, roughness: .95 })), 0, 5, -24); plafond.rotation.x = Math.PI / 2;
+  const verriere = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.45, 1.43, 1.38) });
+  const lumZones = [0, 1, 2, 3].map((r) => {
+    const z = -12 * r - 6, l = 12;
+    [-1, 1].forEach((side) => {
+      const m = add(new THREE.Mesh(new THREE.PlaneGeometry(l, 5), matMur[r]), side * 4, 2.5, z); m.rotation.y = -side * Math.PI / 2;
+      boite(.03, .15, l, blanc, side * 3.985, .075, z);
+      boite(.035, .022, l, or, side * 3.982, .16, z);
+      boite(.08, .12, l, blanc, side * 3.96, 4.94, z);
+      boite(.03, .03, l, or, side * 3.985, 4.7, z);
+    });
+    const v = add(new THREE.Mesh(new THREE.PlaneGeometry(2.2, l - 4.4), verriere), 0, 4.985, z); v.rotation.x = Math.PI / 2;
+    boite(2.42, .05, .11, or, 0, 4.975, z - (l - 4.4) / 2);
+    boite(2.42, .05, .11, or, 0, 4.975, z + (l - 4.4) / 2);
+    [-1.155, 1.155].forEach((x) => boite(.11, .05, l - 4.3, or, x, 4.975, z));
+    return add(new THREE.PointLight(0xfff3e4, r === 3 ? 3 : 20, 13, 2), 0, 4.2, z);
+  });
+  const lum42 = lumZones[3];
+  const ciel = add(new THREE.HemisphereLight(0xfff8ee, 0xd9ccb8, .9));
+
+  // cloisons épaisses (30 cm) percées d'une arche ivoire filetée d'or ; la première est la façade
+  for (let k = 0; k <= 3; k++) {
+    const z = -12 * k, demi = k ? 1.2 : 1, forme = formePorte(demi, 2.2, 4, 5);
+    if (k) add(new THREE.Mesh(new THREE.ShapeGeometry(forme, 24), matMur[k - 1]), 0, 0, z);
+    const dos = add(new THREE.Mesh(new THREE.ShapeGeometry(forme, 24), matMur[k]), 0, 0, z - .3); dos.rotation.y = Math.PI;
+    add(new THREE.Mesh(extruder(arcBand(demi, demi + .16, 2.2), .36, .015), blanc), 0, 0, z - .33);
+    add(new THREE.Mesh(extruder(arcBand(demi + .16, demi + .21, 2.2), .4, .008), or), 0, 0, z - .35);
+    if (k) add(new THREE.Mesh(new THREE.PlaneGeometry(1.5, .375), metal(texEtiquette((C.salles[k]?.num ?? "Salle " + C.age).toUpperCase()))), 0, 3.95, z + .02);
+  }
+  add(new THREE.Mesh(new THREE.PlaneGeometry(8, 5), matMur[3]), 0, 2.5, -48);
+
+  /* extérieur : parvis dallé, perron, portique à colonnes */
+  const parvis = add(new THREE.Mesh(panneau(80, 80, 3.2), new THREE.MeshStandardMaterial({ map: tex(texDallage(), true), roughness: .78, envMapIntensity: .5 })), 0, -.45, 20);
+  parvis.rotation.x = -Math.PI / 2;
+  const facade = add(new THREE.Mesh(new THREE.ShapeGeometry(formePorte(1, 2.2, 12, 8.4), 24), pierre), 0, 0, 0);
+  boite(24, .45, .3, pierre, 0, -.225, .15);
+  boite(24.6, .38, .8, pierre, 0, 8.59, .2); boite(24.62, .05, .82, or, 0, 8.38, .2);
+  [-1, 1].forEach((c) => boite(.6, 9.2, 14, pierre, c * 12.1, 4.15, -6.9));
+  boite(12, .45, 2.4, pierre, 0, -.225, 1.2);
+  boite(12, .3, .4, pierre, 0, -.3, 2.6); boite(12, .15, .4, pierre, 0, -.375, 3.0);
+  [-1, 1].forEach((c) => boite(12.02, .025, .02, or, 0, -.012 - (c > 0 ? 0 : .15), c > 0 ? 2.4 : 2.8));
+  // pilastres et niches des ailes
+  const formeNiche = new THREE.Shape(); formeNiche.moveTo(-.8, 0); formeNiche.lineTo(.8, 0); formeNiche.lineTo(.8, 2.6); formeNiche.absarc(0, 2.6, .8, 0, Math.PI, false); formeNiche.closePath();
+  [-1, 1].forEach((c) => {
+    [7.3, 10.7].forEach((x) => { boite(.7, 8.85, .2, pierre, c * x, 3.975, .1); boite(.8, .12, .26, or, c * x, 7.9, .1); });
+    add(new THREE.Mesh(new THREE.ShapeGeometry(formeNiche, 24), niche), c * 9, 1.1, .01);
+    add(new THREE.Mesh(extruder(arcBand(.8, .86, 2.6), .03, .004), or), c * 9, 1.1, .01);
+    boite(1.9, .08, .3, pierre, c * 9, 1.06, .15);
+  });
+  // portique
+  const fut = new THREE.CylinderGeometry(.27, .31, 5.5, 32), anneauOr = new THREE.TorusGeometry(.29, .035, 10, 40);
+  [-5.5, -3.7, -1.9, 1.9, 3.7, 5.5].forEach((x) => {
+    boite(.78, .22, .78, pierre, x, .11, 1.7);
+    add(new THREE.Mesh(fut, pierre), x, 2.97, 1.7);
+    [.26, 5.7].forEach((y) => add(new THREE.Mesh(anneauOr, or), x, y, 1.7).rotation.x = Math.PI / 2);
+    boite(.82, .28, .82, pierre, x, 5.86, 1.7);
+  });
+  boite(12.4, 1, 2.3, pierre, 0, 6.5, 1.15);
+  [6.03, 6.97].forEach((y) => boite(12.42, .05, 2.32, or, 0, y, 1.15));
+  add(new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), new THREE.MeshBasicMaterial({ map: tex(texPlaque()) })), 0, 6.5, 2.36);
+  {
+    const t = new THREE.Shape(); t.moveTo(-6.4, 0); t.lineTo(6.4, 0); t.lineTo(0, 2); t.closePath();
+    add(new THREE.Mesh(extruder(t, .5, .02), pierre), 0, 7, 1.75);
+    [-1, 1].forEach((c) => { const b = boite(6.75, .08, .08, or, c * 3.2, 8.02, 2.29); b.rotation.z = -c * Math.atan2(2, 6.4); });
+    add(new THREE.Mesh(new THREE.TorusGeometry(.42, .035, 10, 48), or), 0, 7.78, 2.28);
+    boite(.07, .52, .04, or, 0, 7.8, 2.28); boite(.32, .07, .04, or, 0, 7.9, 2.28);
+  }
+  // bannières suspendues entre les colonnes
+  const matBanniere = new THREE.MeshStandardMaterial({ map: tex(texBanniere()), roughness: .8, side: THREE.DoubleSide });
+  [-2.8, 2.8].forEach((x) => {
+    add(new THREE.Mesh(new THREE.PlaneGeometry(.95, 3.09), matBanniere), x, 3.95, 1.7);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, 1.12, 12), or), x, 5.52, 1.7).rotation.z = Math.PI / 2;
+  });
+  // portes en laque ivoire, poignées dorées
+  const vantaux = [];
+  {
+    const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(1, 0); s.lineTo(1, 3.2); s.absarc(1, 2.2, 1, Math.PI / 2, Math.PI, false); s.closePath();
+    const g = new THREE.ExtrudeGeometry(s, { depth: .06, bevelEnabled: true, bevelThickness: .008, bevelSize: .008, bevelSegments: 1, curveSegments: 20 });
+    const relief = new THREE.BoxGeometry(.62, .9, .03), filet = new THREE.BoxGeometry(.66, .94, .012);
+    [-1, 1].forEach((sens) => {
+      const pivot = add(new THREE.Group(), sens * .995, 0, -.19);
+      const m = new THREE.Mesh(g, laque); if (sens > 0) m.scale.x = -1;
+      [.62, 1.72].forEach((y) => [.075, -.015].forEach((dz) => { add(new THREE.Mesh(filet, or), .5, y, dz, m); add(new THREE.Mesh(relief, laque), .5, y, dz + (dz > 0 ? .006 : -.006), m); }));
+      [.1, -.04].forEach((dz) => add(new THREE.Mesh(new THREE.CylinderGeometry(.014, .014, .34, 12), laiton), .88, 1.12, dz, m));
+      pivot.add(m); vantaux.push(pivot);
+    });
+  }
+  // lanternes de part et d'autre de l'entrée
+  const verre = new THREE.MeshStandardMaterial({ color: 0xfff6e6, emissive: 0xffe7c2, emissiveIntensity: 1.3, roughness: .2 });
+  [-1, 1].forEach((c) => {
+    boite(.2, .34, .2, verre, c * 1.5, 2.55, .2); boite(.26, .04, .26, or, c * 1.5, 2.74, .2); boite(.26, .04, .26, or, c * 1.5, 2.36, .2);
+    boite(.03, .03, .16, or, c * 1.5, 2.55, .06);
+    add(new THREE.PointLight(0xffe2b8, 2.5, 5, 2), c * 1.5, 2.55, .7);
+  });
+  // tapis ivoire à liseré doré, haies, topiaires, cordons
+  const matTapis = new THREE.MeshStandardMaterial({ map: tex(texTapis(), true), roughness: 1 });
+  const tapis = (l, y, z) => add(new THREE.Mesh(uvEchelle(new THREE.PlaneGeometry(1.8, l), 1, l / 1.8), matTapis), 0, y, z).rotation.x = -Math.PI / 2;
+  tapis(2.4, .004, 1.2); tapis(13, -.446, 9.7);
+  [-1, 1].forEach((c) => boite(.7, .9, 10, feuillage, c * 4.4, 0, 9.6));
+  const bac = new THREE.CylinderGeometry(.36, .3, .62, 28), boule = new THREE.SphereGeometry(.5, 28, 20);
+  [-6.6, -3, 3, 6.6].forEach((x) => {
+    add(new THREE.Mesh(bac, pierre), x, -.14, 4.1);
+    add(new THREE.Mesh(new THREE.TorusGeometry(.36, .03, 10, 40), or), x, .17, 4.1).rotation.x = Math.PI / 2;
+    add(new THREE.Mesh(boule, feuillage), x, .62, 4.1);
+  });
+  {
+    const potelet = new THREE.CylinderGeometry(.025, .03, .95, 16), socle = new THREE.CylinderGeometry(.12, .14, .03, 24), pommeau = new THREE.SphereGeometry(.045, 16, 12);
+    [-1.2, 1.2].forEach((x) => {
+      const zs = [4.2, 6.6, 9, 11.4];
+      zs.forEach((z) => { add(new THREE.Mesh(potelet, laiton), x, .025, z); add(new THREE.Mesh(socle, laiton), x, -.435, z); add(new THREE.Mesh(pommeau, laiton), x, .51, z); });
+      zs.slice(1).forEach((z) => add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([v3(x, .45, z - 2.4), v3(x, .2, z - 1.2), v3(x, .45, z)]), 24, .02, 8), cordon)));
+    });
+  }
+  // l'affiche de l'exposition, sur un socle de pierre
+  const affiche = add(new THREE.Group(), -2.6, 0, 7); affiche.rotation.y = .45;
+  {
+    const img = C.affiche.photo ? await chargerImage(C.affiche.photo) : null;
+    boite(1.9, .35, .6, pierre, 0, -.275, 0, affiche);
+    [-.93, .93].forEach((x) => add(new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, 2.6, 12), or), x, 1.2, -.05, affiche));
+    boite(1.72, 2.52, .04, pierre, 0, 1.3, -.03, affiche);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.4), new THREE.MeshStandardMaterial({ map: tex(texAffiche(img)), roughness: .5, envMapIntensity: .4 })), 0, 1.3, .005, affiche);
+  }
+  const soleil = add(new THREE.DirectionalLight(0xfff3e0, 2), 5, 12, 16);
+
+  /* bancs : coussin ivoire sur piètement doré */
+  [0, 1, 2].forEach((r) => {
+    const z = -12 * r - 6.6;
+    boite(.5, .1, 2, new THREE.MeshStandardMaterial({ color: 0xf3ede2, roughness: .85 }), 0, .47, z);
+    [-.8, .8].forEach((dz) => boite(.44, .42, .04, or, 0, .21, z + dz));
+  });
+
+  /* rails d'éclairage dorés */
+  [-2.9, 2.9].forEach((x) => boite(.04, .03, 47.4, or, x, 4.97, -24));
+  const projecteur = new THREE.CylinderGeometry(.045, .065, .2, 16);
+  const fixture = (p, cible) => { const m = add(new THREE.Mesh(projecteur, or), p.x, p.y, p.z); m.lookAt(cible); m.rotateX(Math.PI / 2); };
+
+  /* œuvres : cadre doré mouluré (trois anneaux), passe-partout, ombre de contact */
+  const tOmbre = tex(texOmbre());
+  // lueur chaude de la lampe de tableau, du haut du cadre vers le milieu
+  const tLueur = tex((() => { const [c, x] = toile2d(64, 256), g = x.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, "rgba(255, 236, 196, .55)"); g.addColorStop(.45, "rgba(255, 236, 196, .16)"); g.addColorStop(1, "rgba(255, 236, 196, 0)");
+    x.fillStyle = g; x.fillRect(0, 0, 64, 256); return c; })());
+  const ampoule = new THREE.MeshBasicMaterial({ color: 0xfff3d6 });
+  const geoCadre = new Map();
+  function anneau(pw, ph, b, prof, bev) {
+    const cleG = [pw, ph, b, prof].join("x"); if (geoCadre.has(cleG)) return geoCadre.get(cleG);
+    const s = new THREE.Shape(), trou = new THREE.Path();
+    s.moveTo(-pw / 2 - b, -ph / 2 - b); s.lineTo(pw / 2 + b, -ph / 2 - b); s.lineTo(pw / 2 + b, ph / 2 + b); s.lineTo(-pw / 2 - b, ph / 2 + b); s.closePath();
+    trou.moveTo(-pw / 2, -ph / 2); trou.lineTo(-pw / 2, ph / 2); trou.lineTo(pw / 2, ph / 2); trou.lineTo(pw / 2, -ph / 2); trou.closePath();
+    s.holes.push(trou);
+    const g = new THREE.ExtrudeGeometry(s, { depth: prof, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 3 });
+    geoCadre.set(cleG, g); return g;
+  }
+  const cliquables = [], eclairables = [];
+  async function oeuvre(o, w, h) {
+    const grp = new THREE.Group();
+    const img = o.src ? await chargerImage(o.src) : null;
+    const pw = w + .26, ph = h + .26;
+    add(new THREE.Mesh(new THREE.PlaneGeometry(pw + .9, ph + .9), new THREE.MeshBasicMaterial({ map: tOmbre, transparent: true, opacity: .26, depthWrite: false })), 0, -.05, .003, grp);
+    add(new THREE.Mesh(anneau(pw, ph, .025, .05, .008), orPale), 0, 0, .01, grp);
+    add(new THREE.Mesh(anneau(pw + .05, ph + .05, .06, .085, .014), or), 0, 0, .01, grp);
+    add(new THREE.Mesh(anneau(pw + .17, ph + .17, .045, .06, .01), orPale), 0, 0, .01, grp);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), passe), 0, 0, .028, grp);
+    const tableau = add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex(texToile(o, img)), roughness: .62, envMapIntensity: .3 })), 0, 0, .03, grp);
+    tableau.userData.o = o; cliquables.push(tableau);
+    if (o.type !== "pagne") {
+      boite(.2, .13, .006, laiton, pw / 2 + .3, -.55, .004, grp);
+      // lampe de tableau en laiton au-dessus du cadre : rampe, deux bras, ampoule allumée et lueur sur le haut de la photo
+      const yl = ph / 2 + .2;
+      boite(pw * .6, .055, .075, laiton, 0, yl, .2, grp);
+      add(new THREE.Mesh(new THREE.BoxGeometry(pw * .54, .018, .045), ampoule), 0, yl - .035, .21, grp);
+      [-1, 1].forEach((sx) => { boite(.022, .022, .2, laiton, sx * pw * .2, yl, .1, grp); boite(.08, .1, .012, laiton, sx * pw * .2, yl, .006, grp); });
+      add(new THREE.Mesh(new THREE.PlaneGeometry(pw + .2, ph * .7), new THREE.MeshBasicMaterial({ map: tLueur, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })), 0, ph * .15 + .1, .034, grp);
+    }
+    return grp;
+  }
+  // un seul mur par salle, en alternance : droite, gauche, droite (la caméra glisse sans balayer d'un mur à l'autre)
+  const cote = (r) => (r % 2 ? -1 : 1);
+  const charges = [];
+  keys.forEach((K) => {
+    if (K.k !== "oeuvre") return;
+    const z = -12 * K.r - 2.6 - K.j * 2.45, c = cote(K.r);
+    charges.push(oeuvre(K.o, 1.1, 1.47).then((g) => {
+      g.position.set(c * 3.99, 1.7, z); g.rotation.y = -c * Math.PI / 2; scene.add(g); K.groupe = g;
+      const e = { centre: v3(c * 3.99, 1.95, z), spot: v3(c * 3.05, 4.86, z) };
+      fixture(e.spot, e.centre); eclairables.push(e);
+    }));
+  });
+  const pagnes = [];
+  P.choix.forEach((p, i) => charges.push(oeuvre(p, .6, 1.45).then((g) => { g.position.set((i - 1) * 1.08, 2, -47.98); scene.add(g); pagnes[i] = g; })));
+  await Promise.all(charges);
+  barreCharge.style.width = "75%";
+
+  /* projecteurs : un petit groupe fixe, réattribué chaque image aux œuvres les plus proches */
+  const spots = [0, 1, 2, 3].map(() => { const s = new THREE.SpotLight(0xfff3e2, 36, 9, .5, .45, 1.6); scene.add(s, s.target); return s; });
+  const spotFinal = new THREE.SpotLight(0xfff3e2, 12, 10, .38, .5, 1.6);
+  add(spotFinal, 0, 4.86, -44.6); add(spotFinal.target, 0, 2, -48); fixture(v3(0, 4.86, -44.6), v3(0, 2, -48));
+
+  /* drapé de soie ivoire, plissé sur le processeur quand il se lève */
+  const drapeGeo = new THREE.PlaneGeometry(3.2, 3.7, 64, 48), base = drapeGeo.attributes.position.array.slice();
+  const drape = add(new THREE.Mesh(drapeGeo, soie), 0, 2.15, -47.6);
+  drape.scale.x = 1.1;
+  surChoix = (i) => {
+    pagnes.forEach((g, k) => gsap.to(g.position, { z: -47.98 + (k === i ? .08 : 0), duration: .7, ease: "power3.out" }));
+    pagnes.forEach((g, k) => gsap.to(g.scale, { x: k === i ? 1.06 : 1, y: k === i ? 1.06 : 1, duration: .7, ease: "power3.out" }));
+    gsap.to(spotFinal.target.position, { x: pagnes[i].position.x * .6, duration: .9, ease: "power2.inOut", onUpdate: () => spotFinal.target.updateMatrixWorld() });
+  };
+  if (choix !== null) choisirPagne(choix);
+  let liftDrape = -1;
+  function plisser(L) {
+    const p = drapeGeo.attributes.position, haut = 1.85;
+    for (let i = 0; i < p.count; i++) {
+      const x = base[i * 3], y = base[i * 3 + 1];
+      const feston = .5 + .5 * Math.cos(x * Math.PI * 2 / 1.6), k = L * (.93 - .1 * feston * L);
+      const pli = Math.sin(x * 9 + Math.sin(y * 1.7) * .8) * .75 + Math.sin(x * 23 + 1.3) * .25;
+      const rel = clamp((haut - y) / 3.7);
+      p.setXYZ(i, x, haut - (haut - y) * (1 - k), pli * (.045 + .12 * L) + L * .22 * Math.sin(Math.PI * rel));
+    }
+    p.needsUpdate = true; drapeGeo.computeVertexNormals(); liftDrape = L;
+  }
+  plisser(0);
+  {
+    const tringle = add(new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, 3.6, 16), laiton), 0, 4.05, -47.55); tringle.rotation.z = Math.PI / 2;
+    [-1.82, 1.82].forEach((x) => add(new THREE.Mesh(new THREE.SphereGeometry(.055, 16, 12), laiton), x, 4.05, -47.55));
+  }
+  [-1.6, 1.6].forEach((x) => {
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.025, .03, .92, 16), laiton), x, .46, -46.6);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.13, .15, .03, 24), laiton), x, .015, -46.6);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.045, 16, 12), laiton), x, .95, -46.6);
+  });
+  add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([v3(-1.6, .9, -46.6), v3(0, .6, -46.6), v3(1.6, .9, -46.6)]), 32, .022, 10), cordon));
+
+  /* stations de caméra */
+  let courbe = null, angles = [], visees = [];
+  // court : part de l'écran que le cartel mange en bas (0 à 1) ; absent pour le film (cadrage d'origine)
+  function stations(court) {
+    const tv = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), th = tv * cam.aspect;
+    const dist = (hw, hh, m) => Math.max(m, hw / th, hh / tv);
+    const P = [], L = [];
+    keys.forEach((K) => {
+      if (K.k === "facade") { P.push(v3(0, 1.2, 17.5)); L.push(v3(0, 4.7, 0)); }
+      else if (K.k === "affiche") {
+        const c = affiche.position, a = affiche.rotation.y, d = Math.min(dist(.95, 1.35, 2.4), 6);
+        P.push(v3(c.x + Math.sin(a) * d, 1.45, c.z + Math.cos(a) * d)); L.push(v3(c.x, 1.3, c.z));
+      }
+      else if (K.k === "porte") { P.push(v3(0, 1.6, 4.6)); L.push(v3(0, 1.75, -2)); }
+      else if (K.k === "salle") { const c = cote(K.r); P.push(v3(-.5 * c, 1.65, -12 * K.r - 1.3)); L.push(v3(1.6 * c, 1.75, -12 * K.r - 9.5)); }
+      else if (K.k === "oeuvre" && court !== undefined) {
+        // caméra de niveau, face au tableau : cadre et lampe (de 0,7 à 2,95 m) tiennent dans la zone libre au-dessus du cartel
+        const g = K.groupe.position, bas = 1 - .55 * court;
+        const d = Math.min(Math.max(2.25 / (.88 * (1 + bas)) / tv, .95 / (th * .85), 2.2), cam.aspect < 1 ? 3.6 + court : 7);
+        const y = 1.825 - (1 - bas) * d * tv / 2;
+        P.push(v3(g.x - Math.sign(g.x) * d, y, g.z)); L.push(v3(g.x, y, g.z));
+      }
+      else if (K.k === "oeuvre") {
+        const g = K.groupe.position, d = Math.min(dist(.95, 1.3, 2.2), 3.6);
+        P.push(v3(g.x - Math.sign(g.x) * d, 1.65, g.z)); L.push(v3(g.x, 1.2, g.z));
+      }
+      else if (K.k === "final") { P.push(v3(0, 1.9, -48 + dist(1.75, 2, 3.2))); L.push(v3(0, 1.6, -48)); }
+      else { P.push(v3(0, 4.3, -39.5)); L.push(v3(0, 1.5, -47.5)); }
+    });
+    courbe = new THREE.CatmullRomCurve3(P, false, "centripetal");
+    visees = L.map((l, i) => l.clone().sub(P[i]));
+    angles = visees.map((d) => ({ yaw: Math.atan2(-d.x, -d.z), pitch: Math.atan2(d.y, Math.hypot(d.x, d.z)) }));
+  }
+
+  /* rendu d'un instant du parcours */
+  let lift = 0, rev = 0, bx = 0, by = 0, cx = 0, cy = 0;
+  function rendu(s, t, balance) {
+    const { u, i, h } = progres(s);
+    courbe.getPoint(u / DER, cam.position);
+    const i0 = Math.floor(u), i1 = Math.min(i0 + 1, DER), f = u - i0;
+    const yaw = angles[i0].yaw + (angles[i1].yaw - angles[i0].yaw) * f;
+    const pitch = angles[i0].pitch + (angles[i1].pitch - angles[i0].pitch) * f;
+    if (i >= 0) cam.position.addScaledVector(visees[i], Math.sin(Math.PI * h) * .03);
+    cam.rotation.set(pitch, yaw, 0, "YXZ");
+    if (balance) {
+      bx += (cx - bx) * .05; by += (cy - by) * .05;
+      cam.rotation.y -= bx * .015;
+      cam.translateX(bx * .08); cam.translateY(-by * .05 + (reduit ? 0 : Math.sin(t * .5) * .008));
+    }
+    const dehors = clamp((cam.position.z + .5) / 2.5);
+    soleil.intensity = 2 * dehors; ciel.intensity = .9 + .5 * dehors;
+    const ouv = 1.75 * lisse(clamp((s - kPorte.a - .1) / 1));
+    vantaux[0].rotation.y = ouv; vantaux[1].rotation.y = -ouv;
+    lift = lisse(clamp((s - kFinal.a - 1.5) / 1.3)); rev = clamp((s - kFinal.a - 2.5) / .7);
+    if (lift !== liftDrape && (Math.abs(lift - liftDrape) > .003 || lift === 0 || lift === 1)) plisser(lift);
+    drape.visible = lift < .999;
+    lum42.intensity = 3 + 12 * rev;
+    spotFinal.intensity = 12 + 48 * rev;
+    eclairables.sort((a, b) => a.centre.distanceToSquared(cam.position) - b.centre.distanceToSquared(cam.position));
+    spots.forEach((sp, k) => { const e = eclairables[k]; sp.position.copy(e.spot); sp.target.position.copy(e.centre); sp.target.updateMatrixWorld(); });
+  }
+
+  /* calques DOM */
+  function calques(s, lv) {
+    keys.forEach((K, i) => {
+      const op = Math.round(opacite(K, i, s) * (1 - lv) * 100) / 100;
+      if (op !== K.op) {
+        K.op = op; K.el.style.opacity = op; K.el.style.visibility = op < .01 ? "hidden" : "visible";
+        K.el.classList.toggle("on", op > .5);
+      }
+      if (op < .01) return;
+      const lu = clamp((s - (K.a - .55)) / (K.b - K.a + 1.1));
+      K.z.forEach(([e, z]) => { e.style.transform = `translate3d(0,${((lu - .5) * -z * 40).toFixed(1)}px,0)`; });
+      if (K.avant) {
+        K.avant.style.opacity = 1 - clamp(lift * 2);
+        K.apres.style.opacity = rev; K.apres.classList.toggle("actif", rev > .6);
+        const nom = rev > .3 ? C.pagne.salle : "La surprise";
+        if (K.nom.textContent !== nom) K.nom.textContent = nom;
+      }
+    });
+  }
+
+
+  /* qualité et dimensions */
+  let lw = 0, lh = 0, unite = 1;
+  function dimensionner(force) {
+    const w = innerWidth, h = innerHeight;
+    renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
+    cam.aspect = w / h; cam.fov = w < h ? 60 : 45; cam.updateProjectionMatrix(); stations(w < h ? clamp((860 - h) / 240) : 1);
+    if (force || w !== lw || Math.abs(h - lh) > 120) {
+      lw = w; lh = h; unite = h * .85;
+      $("#parcours").style.height = `${T * unite + h}px`;
+      ScrollTrigger.refresh();
+    }
+  }
+  function qualite(v) {
+    haute = v === "haute"; pr = haute ? Math.min(devicePixelRatio, 1.75) : 1;
+    dimensionner(true);
+  }
+  addEventListener("resize", () => { if (!enFilm) dimensionner(); });
+
+  /* défilement */
+  gsap.registerPlugin(ScrollTrigger);
+  const etat = { p: 0 };
+  dimensionner(true);
+  scrollTo(0, 0);
+  if (!reduit) {
+    lenis = new Lenis({ lerp: .055, wheelMultiplier: .75, touchMultiplier: .8 });
+    lenis.on("scroll", ScrollTrigger.update);
+    gsap.ticker.add((t) => lenis.raf(t * 1000));
+    gsap.ticker.lagSmoothing(0);
+  }
+  const tw = gsap.to(etat, { p: 1, ease: "none", scrollTrigger: { trigger: "#parcours", start: "top top", end: "bottom bottom", scrub: reduit ? true : 1.4 } });
+  const position = () => (lenis ? lenis.scroll : scrollY);
+  const etendue = () => T * unite;
+  function aller(y, opts = {}) {
+    if (lenis) lenis.scrollTo(y, { duration: Math.min(4.6, 3 + Math.abs(y - position()) / innerHeight * .15),
+      easing: (t) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2), lock: true, ...opts });
+    else scrollTo({ top: y, behavior: reduit || opts.immediate ? "auto" : "smooth" });
+  }
+  $("#suivant").onclick = () => {
+    const y0 = lenis ? lenis.targetScroll : scrollY, s = y0 / etendue() * T;
+    const arrets = keys.flatMap((K, i) => (!i ? [] : K === kFinal ? [K.a + .6, K.a + K.hold * .8] : [K.a + K.hold * .7]));
+    const cible = arrets.find((a) => a > s + .05);
+    aller(cible !== undefined ? cible / T * etendue() : $("#s-lettre").offsetTop);
+  };
+  /* nuit de fête : façade éclairée sous les astres, puis feux d'artifice qui écrivent */
+  const nuit = { etat: "jour", on: false, id: 0, t0: 0 };
+  let nuitObjets = null;
+  function nuitCreer() {
+    const sn = new THREE.Scene(); sn.background = new THREE.Color(0x16254f);
+    const n = reduit ? 1400 : 2600, pos = new Float32Array(n * 3), att = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const az = (Math.random() * 2 - 1), el = .03 + Math.pow(Math.random(), 1.25) * 1.15, ce = Math.cos(el);
+      pos.set([Math.sin(az) * ce * 100, Math.sin(el) * 100, -Math.cos(az) * ce * 100], i * 3);
+      att.set([1 + Math.pow(Math.random(), 3) * 2.4, Math.random() * 6.28, .6 + Math.random() * 2.2], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("a", new THREE.BufferAttribute(att, 3));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { t: { value: 0 }, e: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `attribute vec3 a; uniform float t; uniform float e; varying vec3 c; varying float v;
+        void main() {
+          float s = .5 + .5 * sin(t * a.z + a.y * 9.);
+          v = .35 + .65 * s; c = mix(vec3(.72, .84, 1.), vec3(1., .9, .7), fract(a.y * 3.7));
+          gl_PointSize = a.x * e * (.75 + .5 * s);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
+        }`,
+      fragmentShader: `varying vec3 c; varying float v;
+        void main() { float r = length(gl_PointCoord - .5) * 2.; if (r > 1.) discard; gl_FragColor = vec4(c, pow(1. - r, 1.5) * v); }`
+    });
+    const astres = new THREE.Points(g, mat); astres.frustumCulled = false; astres.visible = false; astres.renderOrder = -1; scene.add(astres);
+    nuitObjets = { astres, fond: tex(texNuit()), env: pmrem.fromScene(sn, .04).texture, jour: { fond: scene.background, env: scene.environment, ciel: ciel.color.clone(), sol: ciel.groundColor.clone(), soleil: soleil.color.clone() } };
+  }
+  function entrerNuit() {
+    if (!nuitObjets) nuitCreer();
+    const o = nuitObjets;
+    scene.background = o.fond; scene.environment = o.env;
+    ciel.color.set(0x5870b8); ciel.groundColor.set(0x0b1230); soleil.color.set(0x7f98ff);
+    spots.forEach((s) => { s.color.set(0xffb35a); s.distance = 48; s.angle = .5; s.penumbra = .85; s.decay = 2; });
+    o.astres.visible = true;
+    document.body.classList.add("nuit");
+    nuit.on = true; nuit.t0 = performance.now();
+  }
+  // caméra dehors, face à la façade, presque immobile ; projecteurs chauds au sol
+  function poseNuit(t) {
+    const p = innerWidth < innerHeight, k = reduit ? 0 : clamp((performance.now() - nuit.t0) / 52000);
+    cam.position.set(0, 1.8, (p ? 31 : 23) - k * (p ? .9 : .5));
+    cam.lookAt(0, p ? 9.6 : 8.2, 0);
+    ciel.intensity = 1.1; soleil.intensity = 1.05;
+    spots.forEach((s, i) => {
+      const x = (i - 1.5) * (p ? 4.6 : 6.4);
+      s.position.set(x, -.2, 11); s.target.position.set(x * .9, 5.2, .6); s.target.updateMatrixWorld(); s.intensity = 520;
+    });
+    const a = nuitObjets.astres;
+    a.position.copy(cam.position); a.material.uniforms.t.value = reduit ? 0 : t; a.material.uniforms.e.value = pr;
+  }
+  function restaurerJour() {
+    if (!nuit.on && nuit.etat === "jour") return;
+    nuit.id++; nuit.on = false; nuit.etat = "jour";
+    document.body.classList.remove("nuit"); $("#feux")?.remove();
+    if (nuitObjets) {
+      const j = nuitObjets.jour;
+      scene.background = j.fond; scene.environment = j.env;
+      ciel.color.copy(j.ciel); ciel.groundColor.copy(j.sol); soleil.color.copy(j.soleil);
+      spots.forEach((s) => { s.color.set(0xfff3e2); s.intensity = 36; s.distance = 9; s.angle = .5; s.penumbra = .45; s.decay = 1.6; });
+      nuitObjets.astres.visible = false;
+    }
+    lenis?.start();
+  }
+
+  /* feux d'artifice sur canvas 2D : fusées, gerbes, et textes écrits par les étincelles */
+  function feux(vivant) {
+    let W = innerWidth, H = innerHeight, sc = 1;
+    const dpr = Math.min(devicePixelRatio || 1, 2), cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+    cv.id = "feux"; document.body.appendChild(cv);
+    const taille = () => {
+      W = innerWidth; H = innerHeight; sc = clamp(Math.hypot(W, H) / 1500, .5, 1.5);
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    taille(); addEventListener("resize", taille);
+    const PAL = ["rgb(255,196,92)", "rgb(255,238,205)", "rgb(255,120,170)", "rgb(255,70,70)", "rgb(110,255,150)", "rgb(110,170,255)", "rgb(255,226,160)", "rgb(255,246,226)"];
+    const COLS = [0, 0, 1, 2, 3, 4, 5, 6];
+    const N = 17, MAX = 3600, MAXTXT = 1800, p = new Float32Array(MAX * N);
+    const X = 0, Y = 1, VX = 2, VY = 3, AGE = 4, DUR = 5, COL = 6, SZ = 7, K = 8, TX = 9, TY = 10, X0 = 11, Y0 = 12, HOLD = 13, SEED = 14, GR = 15, DRAG = 16;
+    const MAINTIEN = 3.4;
+    let n = 0, residu = false;
+    const bursts = [];
+    const portrait = () => W < H * .9, yTexte = () => H * .3;
+
+    /* détonations */
+    let ac = null, bruit = null, dernier = 0;
+    function boum(f) {
+      if (muet) return;
+      const now = performance.now(); if (now - dernier < 110) return; dernier = now;
+      try {
+        ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+        if (ac.state === "suspended") ac.resume().catch(() => {});
+        if (ac.state !== "running") return;
+        if (!bruit) {
+          bruit = ac.createBuffer(1, Math.floor(ac.sampleRate * .7), ac.sampleRate);
+          const d = bruit.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.2);
+        }
+        const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
+        s.buffer = bruit; fl.type = "lowpass"; fl.frequency.setValueAtTime(900 + Math.random() * 400, t); fl.frequency.exponentialRampToValueAtTime(90, t + .6);
+        g.gain.value = .12 * f; s.connect(fl); fl.connect(g); g.connect(ac.destination); s.start();
+      } catch (_) {}
+    }
+
+    /* particules */
+    function emettre(x, y, vx, vy, dur, col, sz, k, gr = 1, drag = 1.6) {
+      if (n >= MAX) return -1;
+      const o = n++ * N;
+      p[o + X] = x; p[o + Y] = y; p[o + VX] = vx; p[o + VY] = vy; p[o + AGE] = 0; p[o + DUR] = dur; p[o + COL] = col; p[o + SZ] = sz; p[o + K] = k;
+      p[o + SEED] = Math.random(); p[o + GR] = gr; p[o + DRAG] = drag;
+      return o;
+    }
+    function tir(tx, ty, b, dur = .8 + Math.random() * .35) {
+      const x0 = tx + (Math.random() - .5) * W * .2, o = emettre(x0, H + 8, 0, 0, dur, 6, 2.2 * sc + .8, 0);
+      if (o < 0) return;
+      bursts.push(b); p[o + X0] = x0; p[o + Y0] = H + 8; p[o + TX] = tx; p[o + TY] = ty; p[o + GR] = bursts.length - 1;
+    }
+    const gerbe = (type) => {
+      const t = type || ["pivoine", "chrysantheme", "pivoine", "chrysantheme", "saule"][(Math.random() * 5) | 0];
+      return { type: t, col: t === "saule" ? (Math.random() < .5 ? 0 : 6) : COLS[(Math.random() * COLS.length) | 0], col2: 1 };
+    };
+    function eclater(b, x, y) {
+      boum(b.texte ? 1 : .6);
+      if (b.texte) ecrire(b.texte, x, y);
+      const t = b.type, R = (b.texte ? 120 : 190 + Math.random() * 70) * sc;
+      const nb = Math.round((t === "saule" ? 70 : t === "chrysantheme" ? 85 : 100) * (reduit ? .55 : 1) * (b.texte ? .4 : 1));
+      for (let i = 0; i < nb; i++) {
+        const a = Math.random() * 6.2832, r = Math.random();
+        const col = Math.random() < .75 ? b.col : b.col2;
+        if (t === "saule") { const v = R * 1.15 * (.6 + .4 * r); emettre(x, y, Math.cos(a) * v, Math.sin(a) * v, 2.8 + Math.random() * .6, col, 1.8 * sc + .4, 1, 1.8, 1.1); }
+        else if (t === "chrysantheme") { const v = R * 1.8 * (.7 + .3 * r); emettre(x, y, Math.cos(a) * v, Math.sin(a) * v, 2 + Math.random() * .5, col, 1.9 * sc + .4, 4, 1, 1.8); }
+        else { const v = R * 2.2 * (r < .7 ? .85 + .15 * r : .5 * r + .2); emettre(x, y, Math.cos(a) * v, Math.sin(a) * v, 1.5 + Math.random() * .4, col, 2 * sc + .4, 1, 1, 2.2); }
+      }
+    }
+    function ecrire(tx, x, y) {
+      for (const [px, py] of tx.pts) {
+        const r = Math.random(), ci = r < .55 ? tx.c1 : r < .9 ? 6 : 0, vol = .85 + Math.random() * .3;
+        const o = emettre(x + (Math.random() - .5) * 6, y + (Math.random() - .5) * 6, 0, 0, vol + MAINTIEN, ci, tx.r, 2);
+        if (o < 0) break;
+        p[o + X0] = p[o + X]; p[o + Y0] = p[o + Y]; p[o + TX] = px; p[o + TY] = py; p[o + HOLD] = vol;
+      }
+    }
+    function avancer(dt) {
+      const G = 95 * sc;
+      for (let i = n - 1; i >= 0; i--) {
+        const o = i * N, k = p[o + K], dur = p[o + DUR];
+        p[o + AGE] += dt;
+        const age = p[o + AGE];
+        if (k === 2) {
+          const vol = p[o + HOLD];
+          if (age < vol) { const e = 1 - Math.pow(1 - age / vol, 3); p[o + X] = p[o + X0] + (p[o + TX] - p[o + X0]) * e; p[o + Y] = p[o + Y0] + (p[o + TY] - p[o + Y0]) * e; }
+          else if (age < dur) { p[o + X] = p[o + TX]; p[o + Y] = p[o + TY]; }
+          else { p[o + K] = 1; p[o + AGE] = 0; p[o + DUR] = 1.1 + Math.random() * .9; p[o + VX] = (Math.random() - .5) * 26 * sc; p[o + VY] = (Math.random() * 30 + 5) * sc; p[o + GR] = 1; p[o + DRAG] = .9; p[o + SZ] = 1.4 * sc + .4; }
+          continue;
+        }
+        if (age >= dur) {
+          if (k === 0) eclater(bursts[p[o + GR]], p[o + X], p[o + Y]);
+          else if (k === 4 && Math.random() < .6) for (let c = 0; c < 3; c++) emettre(p[o + X], p[o + Y], (Math.random() - .5) * 90 * sc, (Math.random() - .5) * 90 * sc, .3 + Math.random() * .2, 1, 1.2, 1, .5, 2);
+          const d = --n * N; if (d !== o) p.copyWithin(o, d, d + N);
+          continue;
+        }
+        if (k === 0) {
+          const u = age / dur, e = 1 - (1 - u) * (1 - u), de = 2 * (1 - u) / dur;
+          p[o + X] = p[o + X0] + (p[o + TX] - p[o + X0]) * e; p[o + Y] = p[o + Y0] + (p[o + TY] - p[o + Y0]) * e;
+          p[o + VX] = (p[o + TX] - p[o + X0]) * de; p[o + VY] = (p[o + TY] - p[o + Y0]) * de;
+          emettre(p[o + X], p[o + Y], (Math.random() - .5) * 20 * sc, (25 + Math.random() * 25) * sc, .35 + Math.random() * .25, 0, 1.2 * sc + .4, 1, 1, 3);
+        } else {
+          const f = Math.exp(-p[o + DRAG] * dt);
+          p[o + VX] *= f; p[o + VY] = p[o + VY] * f + G * p[o + GR] * dt;
+          p[o + X] += p[o + VX] * dt; p[o + Y] += p[o + VY] * dt;
+        }
+      }
+    }
+    function dessiner(dt) {
+      ctx.globalCompositeOperation = "destination-out"; ctx.globalAlpha = 1; ctx.fillStyle = `rgba(0,0,0,${1 - Math.exp(-dt * 12)})`; ctx.fillRect(0, 0, W, H);
+      if (!n) { if (residu) { ctx.clearRect(0, 0, W, H); residu = false; } return; }
+      residu = true; ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+      for (let i = 0; i < n; i++) {
+        const o = i * N, k = p[o + K], x = p[o + X], y = p[o + Y], age = p[o + AGE];
+        if (k === 2) {
+          const vol = p[o + HOLD], a = age < vol ? Math.min(1, age / vol * 3) : .72 + .28 * Math.sin(age * 9 + p[o + SEED] * 60), r = p[o + SZ];
+          ctx.fillStyle = PAL[p[o + COL]];
+          ctx.globalAlpha = a * .2; ctx.beginPath(); ctx.arc(x, y, r * 3, 0, 6.2832); ctx.fill();
+          ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+        } else {
+          const u = age / p[o + DUR];
+          let a = Math.min(1, (1 - u) * 2.2);
+          if (k === 4 && u > .5) a *= .6 + .4 * Math.abs(Math.sin(age * 35 + p[o + SEED] * 90));
+          ctx.globalAlpha = a; ctx.strokeStyle = PAL[p[o + COL]]; ctx.lineWidth = p[o + SZ] * (k === 0 ? 1 : .6 + .4 * (1 - u));
+          ctx.beginPath(); ctx.moveTo(x - p[o + VX] * .028, y - p[o + VY] * .028); ctx.lineTo(x, y); ctx.stroke();
+        }
+      }
+    }
+
+    /* texte : mots dessinés hors écran puis échantillonnés en points */
+    function pointsTexte(txt, gros = 1, c1 = 7) {
+      const mots = txt.split(" "), cas = toile2d(10, 10), c = cas[0], x = cas[1];
+      let lignes = [txt];
+      if (portrait() && mots.length > 1) {
+        let best = 1, d = 1e9;
+        for (let i = 1; i < mots.length; i++) { const e = Math.abs(mots.slice(0, i).join(" ").length - mots.slice(i).join(" ").length); if (e < d) { d = e; best = i; } }
+        lignes = [mots.slice(0, best).join(" "), mots.slice(best).join(" ")];
+      }
+      const police = (fs) => `700 ${fs}px ${SERIF}`;
+      x.font = police(100);
+      const w100 = Math.max(...lignes.map((l) => x.measureText(l).width));
+      const fs = Math.min(W * .88 / w100 * 100, Math.min(H * .2, W * (portrait() ? .26 : .16)) * gros, H * .36 / (1.15 * lignes.length));
+      const cw = Math.ceil(W), lh = fs * 1.15, ch = Math.ceil(lh * lignes.length + fs * .3);
+      c.width = cw; c.height = ch;
+      x.font = police(fs); x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff";
+      lignes.forEach((l, i) => x.fillText(l, cw / 2, lh * (i + .5) + fs * .1));
+      const d = x.getImageData(0, 0, cw, ch).data;
+      let encre = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 120) encre++;
+      const pas = Math.max(2, Math.round(Math.sqrt(encre / (reduit ? 700 : 1700)))), pts = [], oy = yTexte() - ch / 2;
+      for (let j = 0; j < ch; j += pas) for (let i = 0; i < cw; i += pas) if (d[(j * cw + i) * 4 + 3] > 120) pts.push([i + (Math.random() - .5) * pas * .6, oy + j + (Math.random() - .5) * pas * .6]);
+      while (pts.length > MAXTXT) pts.splice((Math.random() * pts.length) | 0, 1);
+      return { pts, r: clamp(pas * .46, 1.2, 3), c1 };
+    }
+
+    /* déroulé */
+    const ev = [], a = (t, f) => ev.push([t, f]);
+    const rx = (lo = .1, hi = .9) => W * (lo + Math.random() * (hi - lo)), ry = () => H * (.12 + Math.random() * .3);
+    const bouquet = (t0, t1, m, saules) => { for (let i = 0; i < m; i++) a(t0 + (t1 - t0) * i / m + Math.random() * .2, () => tir(rx(), ry(), gerbe(saules && i % 3 === 2 ? "saule" : undefined))); };
+    const texte = (t, txt, gros, c1) => a(t, () => tir(W / 2, yTexte(), { type: "pivoine", col: 0, col2: 1, texte: pointsTexte(txt, gros, c1) }, 1.05));
+    const cote = (t) => a(t, () => tir(portrait() ? rx() : Math.random() < .5 ? rx(.06, .2) : rx(.8, .94), portrait() ? H * (.52 + Math.random() * .1) : H * (.15 + Math.random() * .3), gerbe()));
+    const age = `${C.age} ans`;
+    let tFin;
+    if (reduit) {
+      texte(1, C.surnom); texte(7.5, "Joyeux anniversaire"); texte(14, age, 1.45, 6); texte(20.5, "Que Dieu te bénisse");
+      bouquet(26.5, 28.5, 4); tFin = 28.5;
+    } else {
+      bouquet(.3, 6, 14);
+      texte(6.5, C.surnom); cote(9.2); cote(10.4);
+      bouquet(12.4, 15.4, 9);
+      texte(15.8, "Joyeux anniversaire"); cote(18.8); cote(20);
+      texte(22.6, age, 1.45, 6);
+      bouquet(28.4, 30.4, 5);
+      texte(30.8, "Que Dieu te bénisse"); cote(33.8); cote(35.2);
+      bouquet(37.6, 43.8, 44, true); tFin = 43.8;
+    }
+    ev.sort((u, v) => u[0] - v[0]);
+
+    return new Promise((fini) => {
+      let prec = performance.now(), ts = 0, ie = 0, calme = -1;
+      const nettoyer = () => { removeEventListener("resize", taille); cv.remove(); ac?.close?.().catch?.(() => {}); fini(); };
+      const sortir = async () => { cv.style.transition = "opacity 1.2s"; cv.style.opacity = 0; await attendre(1300); nettoyer(); };
+      const tick = (now) => {
+        if (!vivant()) return nettoyer();
+        const dt = Math.min(.25, Math.max(0, (now - prec) / 1000)); prec = now; ts += dt;
+        while (ie < ev.length && ev[ie][0] <= ts) ev[ie++][1]();
+        for (let r = dt; r > 0; r -= .05) avancer(Math.min(.05, r));
+        dessiner(dt);
+        if (ie >= ev.length && !n) { if (calme < 0) calme = ts; else if (ts - calme > 3) return sortir(); }
+        else { calme = -1; if (ts > tFin + 14) return sortir(); }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+  async function nuitDeFete() {
+    if (nuit.etat !== "jour") return;
+    const id = ++nuit.id, vivant = () => nuit.id === id, voile = $("#voile-noir");
+    nuit.etat = "feux"; lenis?.stop();
+    voile.classList.add("on"); await attendre(800);
+    if (!vivant()) return;
+    entrerNuit(); await attendre(250);
+    voile.classList.remove("on");
+    if (!vivant()) return;
+    await feux(vivant);
+    if (vivant()) nuit.etat = "fini";
+  }
+
+  // rideaux fermés par-dessus l'écran, puis la page rejoint discrètement la salle de cinéma derrière eux
+  function fermerRideaux() {
+    const c = $("#s-cinema"); if (!c.classList.contains("ouvert")) return;
+    c.classList.remove("ouvert");
+    setTimeout(() => { if (!c.classList.contains("ouvert")) { restaurerJour(); aller(c.offsetTop, { immediate: true, force: true }); } }, 2800);
+  }
+  $("#aller-cine").onclick = fermerRideaux;
+
+  /* visite guidée : la caméra avance seule, la page ne défile qu'à la sortie ; un toucher met en pause */
+  const auto = { on: false, pause: false, attente: false, s: 0, dt: 0, final: false };
+  function pauser(v) { auto.pause = v; document.body.classList.toggle("pause", v); }
+  function guide(on) {
+    auto.on = on; pauser(false); auto.attente = false; document.body.classList.toggle("auto", on);
+    if (on) return;
+    const y = auto.s / T * etendue();
+    if (lenis) lenis.scrollTo(y, { immediate: true, force: true }); else scrollTo(0, y);
+    ScrollTrigger.update(); tw.scrollTrigger?.getTween()?.progress(1);
+  }
+  // après la visite : la lettre, lue en défilant lentement, jusqu'à la fermeture des rideaux
+  async function versLaFin() {
+    const yL = $("#s-lettre").offsetTop, yC = $("#s-cinema").offsetTop;
+    aller(yL); await attendre(4800);
+    if (auto.on || Math.abs(position() - yL) > 40) return;
+    // défilement lent jusqu'à ce que la fin de la lettre (signature) soit entièrement à l'écran
+    const lettre = $(".lettre"), sign = $(".lettre .sign");
+    const yFin = Math.max(yL, position() + lettre.getBoundingClientRect().bottom - innerHeight + 24);
+    const lecture = clamp(lettre.textContent.trim().split(/\s+/).length / 2.6, 18, 80);
+    if (lenis) lenis.scrollTo(yFin, { duration: lecture, easing: (t) => (1 - Math.cos(Math.PI * t)) / 2 });
+    else { await attendre(lecture * 1000 * .5); aller(yFin); }
+    await attendre(lecture * 1000 + 600);
+    if (auto.on || Math.abs(position() - yFin) > 40) return;
+    const r = sign.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) { aller(yFin, { immediate: true }); await attendre(300); }
+    // le temps de savourer la signature, puis les rideaux se ferment dessus
+    await attendre(3500);
+    if (auto.on || Math.abs(position() - yFin) > 40 || !$("#s-cinema").classList.contains("ouvert")) return;
+    await nuitDeFete();
+    if (!auto.on && nuit.etat === "fini") fermerRideaux();
+  }
+  function lancerVisite() {
+    const d = document.documentElement, fs = d.requestFullscreen || d.webkitRequestFullscreen;
+    try { fs?.call(d)?.catch?.(() => {}); } catch (_) {}
+    fermerFiche(); restaurerJour(); aller(0, { immediate: true, force: true });
+    $("#s-cinema").classList.add("ouvert");
+    auto.s = 0; auto.dt = 0; auto.final = false; guide(true); jouer();
+  }
+  function visite(dt) {
+    if (auto.pause || auto.attente || $("#fiche").classList.contains("on")) { auto.dt = 0; return; }
+    // pas lissé : les à-coups d'images ne se voient plus dans le mouvement
+    auto.dt = auto.dt ? auto.dt + (Math.min(dt, .05) - auto.dt) * .2 : Math.min(dt, 1 / 60);
+    auto.s = Math.min(T, avancer(auto.s, auto.dt));
+    // au cadeau, la visite attend qu'elle choisisse son pagne
+    if (!auto.final && auto.s >= kFinal.b) { auto.final = true; auto.s = kFinal.b; auto.attente = true; $("#pagne-r").textContent = "Touche le pagne qui te plaît pour continuer."; }
+    if (auto.s >= T) { guide(false); versLaFin(); }
+  }
+  const choixVisite = surChoix;
+  surChoix = (i) => { choixVisite?.(i); if (auto.on && auto.attente) setTimeout(() => { auto.attente = false; }, 1800); };
+  addEventListener("wheel", () => auto.on && guide(false), { passive: true });
+  addEventListener("touchmove", (e) => { if (auto.on && appui && Math.abs(e.touches[0].clientY - appui.y) > 12) guide(false); }, { passive: true });
+  addEventListener("keydown", (e) => { if (auto.on && ["ArrowDown", "ArrowUp", "PageDown", "PageUp", " "].includes(e.key)) guide(false); });
+  $("#visite-auto").onclick = lancerVisite;
+  const rejouer = async (guidee) => {
+    $("#voile-noir").classList.add("on"); await attendre(600);
+    restaurerJour();
+    $("#s-cinema").classList.add("ouvert");
+    if (guidee) lancerVisite(); else aller(0, { immediate: true, force: true });
+    await attendre(900); $("#voile-noir").classList.remove("on");
+  };
+  $("#revoir").onclick = () => rejouer(true);
+  $("#revisiter").onclick = () => rejouer(false);
+
+  /* toucher : œuvres, musique, gyroscope ; souris : flottement */
+  const rc = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let appui = null, gyro = false;
+  addEventListener("pointerdown", (e) => { appui ={ x: e.clientX, y: e.clientY, cible: e.target }; }, { passive: true });
+  addEventListener("pointerup", (e) => {
+    if (!gyro && !reduit && window.DeviceOrientationEvent && e.pointerType !== "mouse") {
+      gyro = true;
+      const ecoute = () => addEventListener("deviceorientation", (o) => { if (o.gamma == null) return; cx = clamp(o.gamma / 25, -1, 1); cy = clamp((o.beta - 50) / 25, -1, 1); });
+      if (typeof DeviceOrientationEvent.requestPermission === "function") DeviceOrientationEvent.requestPermission().then((r) => r === "granted" && ecoute()).catch(() => {});
+      else ecoute();
+    }
+    if (!appui) return;
+    const a = appui; appui = null;
+    if (Math.hypot(e.clientX - a.x, e.clientY - a.y) > 8 || a.cible.closest?.("button, a, .fiche, .lettre, .film, #s-lettre, #s-cinema")) return;
+    if (auto.on && !auto.attente) { pauser(!auto.pause); return; }
+    if (position() > etendue() + innerHeight * .2 || enFilm || $("#fiche").classList.contains("on")) return;
+    ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    rc.setFromCamera(ndc, cam);
+    const hit = rc.intersectObjects(cliquables)[0];
+    if (!hit) return;
+    const o = hit.object.userData.o;
+    if (o.type === "pagne") { if (rev > .6) choisirPagne(o.i); return; }
+    if (!auto.on) ouvrirFiche(o);
+  });
+  addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse" || reduit) return;
+    cx = (e.clientX / innerWidth - .5) * 2; cy = (e.clientY / innerHeight - .5) * 2;
+  }, { passive: true });
+
+  /* boucle */
+  const t0 = performance.now();
+  let tMes = 0, nbImg = 0, fpsMes = 0, tPrec = t0;
+  function boucle() {
+    if (enFilm) return;
+    const now = performance.now(), t = (now - t0) / 1000, dt = Math.min(.1, (now - tPrec) / 1000); tPrec = now;
+    if (auto.on) visite(dt);
+    const s = auto.on ? auto.s : etat.p * T, y = position();
+    if (nuit.on) { rendu(T, t, false); poseNuit(t); renderer.render(scene, cam); }
+    else if (y < etendue() + innerHeight * 1.6) { rendu(s, t, !reduit); renderer.render(scene, cam); }
+    calques(s, clamp((y - etendue()) / (innerHeight * .35)));
+    posteMusique = y > etendue() ? 2 : pisteDe(s); ambiance(posteMusique);
+    $("#suivant").classList.toggle("cache", y > etendue() + innerHeight * .5);
+    if (now - t0 > 2500) {
+      if (!tMes) { tMes = now; nbImg = 0; }
+      nbImg++;
+      if (now - tMes > 1500) {
+        fpsMes = nbImg * 1000 / (now - tMes); tMes = now; nbImg = 0;
+        if (fpsMes < 40 && haute && !manuel) qualite("basse");
+      }
+    }
+  }
+  gsap.ticker.add(boucle);
+  // rendu hors écran pour le film de la visite (720×1280)
+  moteur = {
+    preparer() { renderer.setPixelRatio(1); renderer.setSize(W, H, false); cam.aspect = W / H; cam.fov = 60; cam.updateProjectionMatrix(); stations(); },
+    image(s, t) { rendu(s, t, false); renderer.render(scene, cam); return renderer.domElement; },
+    rendre() { dimensionner(true); }
+  };
+  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat };
+
+  barreCharge.style.width = "100%";
+  rendu(0, 0, false); renderer.render(scene, cam);
+  await attendre(250);
+  $("#charge").classList.add("fin");
+  musiqueAuto();
+  if (!reduit) gsap.from(".titre-musee .l", { yPercent: 105, opacity: 0, duration: 1.2, ease: "expo.out", stagger: .045, delay: .35 });
+}
+
+/* ============================================================
+   FILM DE LA VISITE : la visite guidée rejouée hors écran (720×1280),
+   cadre doré et cartes dessinés par-dessus, arrêtée avant la surprise.
+   ============================================================ */
+const POL = { s: "'Hanken Grotesk', Arial, sans-serif", d: "'Bodoni Moda', Georgia, serif" };
+const OR = "rgba(199, 162, 90, .85)", OR_FONCE = "#8a6a2e", ENCRE = "#2b241d";
+const eo = (t) => 1 - Math.pow(1 - clamp(t), 3);
+function lettres(x, txt, cx, y, t, size, st = .045) {
+  const ch = [...txt], ws = ch.map((c) => x.measureText(c).width), tot = ws.reduce((a, b) => a + b, 0);
+  let px = cx - tot / 2;
+  x.save(); x.textAlign = "left"; x.beginPath(); x.rect(0, y - size * 1.05, W, size * 1.4); x.clip();
+  ch.forEach((c, i) => { const p = eo((t - i * st) / .8); if (p > 0) x.fillText(c, px, y + (1 - p) * size * 1.15); px += ws[i]; });
+  x.restore();
+}
+function losange(x, cx, cy, rx, ry, c) {
+  x.fillStyle = c; x.beginPath(); x.moveTo(cx, cy - ry); x.lineTo(cx + rx, cy); x.lineTo(cx, cy + ry); x.lineTo(cx - rx, cy); x.closePath(); x.fill();
+}
+// pagne : bandes de losanges et frises en zigzag ; oy fait défiler le motif
+function motifPagne(x, [a, b, d], w, h, s, oy = 0) {
+  x.save(); x.fillStyle = a; x.fillRect(0, 0, w, h);
+  for (let k = Math.floor(-oy / s) - 1; k * s + oy < h; k++) {
+    const y0 = k * s + oy, m = y0 + s / 2;
+    x.fillStyle = b; x.fillRect(0, y0 - 2, w, 4);
+    if (((k % 2) + 2) % 2 === 0) {
+      for (let cx = s / 2; cx < w + s; cx += s) {
+        losange(x, cx, m, s * .42, s * .38, b); losange(x, cx, m, s * .22, s * .2, d); losange(x, cx, m, s * .07, s * .07, a);
+        losange(x, cx - s / 2, m, s * .06, s * .06, d);
+      }
+    } else {
+      x.strokeStyle = d; x.lineWidth = s * .045;
+      [-.14, .14].forEach((e) => { x.beginPath(); for (let px = 0, j = 0; px <= w + s; px += s / 4, j++) x.lineTo(px, m + e * s + (j % 2 ? -1 : 1) * s * .09); x.stroke(); });
+      x.fillStyle = b; for (let px = s / 4; px < w + s; px += s / 2) { x.beginPath(); x.arc(px, m, s * .04, 0, 7); x.fill(); }
+    }
+  }
+  x.restore();
+}
+
+// la carte claire d'un arrêt, comme les calques du musée
+const STYLES = { sur: [`500 18px ${POL.s}`, OR_FONCE, 30], titre: [`italic 44px ${POL.d}`, ENCRE, 50], texte: [`400 22px ${POL.s}`, "#5d4f40", 30], verset: [`italic 25px ${POL.d}`, OR_FONCE, 32] };
+function carte2d(x, K, a, s) {
+  if (K.k === "oeuvre") return cartelCanvas(x, K.o, a);
+  if (K.k === "final") {
+    // la question de suspense cède la place au pagne choisi
+    const r = clamp((s - K.a - 2.3) / .6);
+    if (r < 1) carte2d(x, { k: "texte", L: [["sur", "Un dernier secret"], ["titre", "Es-tu prête à découvrir le cadeau que j'ai prévu pour toi ?"]] }, a * (1 - r));
+    if (r > 0) carte2d(x, { k: "texte", L: [["sur", `Salle ${C.age} · ${C.pagne.salle}`], ["texte", P.question], ...(choix === null ? [] : [["titre", P.choix[choix].nom], ["sur", "Prêt pour le Ngouon 2026"]])] }, a * r);
+    return;
+  }
+  const L = K.L ? K.L :K.k === "facade" ? [["sur", C.affiche.sous], ["titre", C.nomMusee], ["texte", C.exposition], ["sur", C.dateVisite]]
+    : K.k === "affiche" ? [["sur", "À l'affiche"]]
+    : K.k === "porte" ? [["sur", "Bienvenue"], ["titre", `Entrez, ${C.prenom}`], ["texte", "Ouvert tous les jours, pour une seule visiteuse."]]
+    : K.k === "salle" ? [["sur", K.s.num], ["titre", K.s.titre], ["verset", K.s.verset], ["sur", K.s.ref]] : null;
+  if (!L) return;
+  const cw = 676, cx = W / 2 - cw / 2;
+  x.save(); x.globalAlpha = a; x.textAlign = "center";
+  const blocs = L.map(([k, t]) => { x.font = STYLES[k][0]; return [k, k === "sur" ? [String(t).toUpperCase()] : lignes(x, t, cw - 80)]; });
+  const ch = blocs.reduce((h, [k, l]) => h + l.length * STYLES[k][2] + 8, 44), cy = K.k === "affiche" ? 120 : 1150 - ch;
+  const g = x.createLinearGradient(0, cy, 0, cy + ch); g.addColorStop(0, "rgba(255, 254, 250, .97)"); g.addColorStop(1, "rgba(249, 242, 228, .95)");
+  x.fillStyle = g; x.fillRect(cx, cy, cw, ch);
+  x.strokeStyle = OR; x.lineWidth = 2; x.strokeRect(cx + 1, cy + 1, cw - 2, ch - 2);
+  x.strokeStyle = "rgba(199, 162, 90, .45)"; x.lineWidth = 1.5; x.strokeRect(cx + 10, cy + 10, cw - 20, ch - 20);
+  let y = cy + 22;
+  blocs.forEach(([k, l]) => {
+    x.font = STYLES[k][0]; x.fillStyle = STYLES[k][1];
+    l.forEach((t) => { y += STYLES[k][2]; k === "sur" ? espace(x, t, W / 2, y - 6, 3) : x.fillText(t, W / 2, y - 8); });
+    y += 8;
+  });
+  x.restore();
+}
+// passe-partout ivoire et double filet doré, comme le cadre de la visite guidée
+function cadre2d(x) {
+  const m = 18;
+  x.save(); x.fillStyle = "rgba(250, 246, 238, .97)";
+  x.fillRect(0, 0, W, m); x.fillRect(0, H - m, W, m); x.fillRect(0, m, m, H - 2 * m); x.fillRect(W - m, m, m, H - 2 * m);
+  x.strokeStyle = OR; x.lineWidth = 2; x.strokeRect(m, m, W - 2 * m, H - 2 * m);
+  x.strokeStyle = "rgba(255, 253, 247, .5)"; x.lineWidth = 8; x.strokeRect(m + 5, m + 5, W - 2 * m - 10, H - 2 * m - 10);
+  x.strokeStyle = "rgba(199, 162, 90, .5)"; x.lineWidth = 1.5; x.strokeRect(m + 10, m + 10, W - 2 * m - 20, H - 2 * m - 20);
+  const fil = x.createLinearGradient(W / 2 - 60, 0, W / 2 + 60, 0); fil.addColorStop(0, "rgba(199, 162, 90, 0)"); fil.addColorStop(.5, "#c7a25a"); fil.addColorStop(1, "rgba(199, 162, 90, 0)");
+  x.fillStyle = fil; x.fillRect(W / 2 - 60, m - 2, 120, 4);
+  x.restore();
+}
+// dernière image : « Joyeux anniversaire » sur fond ivoire
+function finFilm(x, l) {
+  x.save(); x.globalAlpha = eo(l / 1.4);
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#fffefa"); g.addColorStop(1, "#f3ead8");
+  x.fillStyle = g; x.fillRect(0, 0, W, H); x.restore();
+  cadre2d(x);
+  x.save(); x.textAlign = "center"; x.fillStyle = OR_FONCE;
+  x.font = `italic 110px ${POL.d}`; lettres(x, "Joyeux", W / 2, 560, l - .7, 110, .06);
+  x.font = `italic 82px ${POL.d}`; lettres(x, "anniversaire", W / 2, 670, l - 1.1, 82, .04);
+  x.globalAlpha = eo((l - 2.1) / 1); x.fillStyle = ENCRE; x.font = `500 40px ${POL.d}`; x.fillText(`Pour tes ${C.age} ans`, W / 2, 790);
+  x.globalAlpha = eo((l - 2.7) / 1) * .9; x.fillStyle = "#8a7660"; x.font = `italic 30px ${POL.d}`; x.fillText(C.signature, W / 2, 860);
+  x.restore();
+}
+const S_FILM = kFinal.b + .6, FIN_FILM = 5, DUREE_FILM = duree(S_FILM) + FIN_FILM;
+const enMinutes = (d) => `${Math.floor(d / 60)} min ${String(Math.round(d % 60)).padStart(2, "0")}`;
+function imageFilm(x, s, tf, t) {
+  x.drawImage(moteur.image(s, t), 0, 0, W, H);
+  keys.forEach((K, i) => { const a = opacite(K, i, s); if (a > .01) carte2d(x, K, a, s); });
+  cadre2d(x);
+  if (tf > 0) finFilm(x, tf);
+}
+
+/* ---------- Fin : rideaux et options ---------- */
+$("#credits").textContent = C.musique?.credits || "";
+// les rideaux se ferment quand on arrive, puis les options apparaissent
+new IntersectionObserver(([e]) => {
+  $("#s-cinema").classList.toggle("ouvert", !e.isIntersecting);
+}, { threshold: .55 }).observe($("#s-cinema"));
+$("#aide-film").textContent = `Le film de ta visite se prépare en temps réel (environ ${enMinutes(DUREE_FILM)}), puis touche « Partager » et choisis WhatsApp, puis « Mon statut ».`;
+
+/* ---------- Export vidéo (MP4 si possible, sinon WebM) ---------- */
+let fichierFilm = null, annule = false;
+let partageFilm = false;
+async function filmer(partage) {
+  partageFilm = !!partage;
+  // créé tout de suite, dans le geste, sinon le navigateur le laisse muet
+  let ac = null; try { ac = new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (_) {}
+  const etatF = $("#film-etat"), barre = $("#film-barre"), cv = $("#film-canvas"), vid = $("#film-video");
+  $("#film").hidden = false; cv.hidden = false; vid.hidden = true; $("#film-enregistrer").hidden = true; annule = false;
+  const types = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  const mime = window.MediaRecorder && cv.captureStream && moteur ? types.find((m) => MediaRecorder.isTypeSupported(m)) : null;
+  if (!mime) { ac?.close(); etatF.textContent = "Ce navigateur ne sait pas enregistrer de vidéo. Ouvre le musée dans Safari ou Chrome à jour."; return; }
+  etatF.textContent = "Préparation du film…";
+  await document.fonts.ready;
+
+  const x = cv.getContext("2d"), flux = cv.captureStream(30);
+  // bande son : mêmes musiques que la visite, enchaînées en fondu quand le film passe d'un poste à l'autre
+  let son = null;
+  if (ac) {
+    try {
+      const dest = ac.createMediaStreamDestination(), maitre = ac.createGain(); maitre.connect(dest);
+      dest.stream.getAudioTracks().forEach((t) => flux.addTrack(t));
+      const tampons = await Promise.all([C.musique?.visite, C.musique?.gospel, C.musique?.finale].map((u) => (u
+        ? fetch(u).then((r) => r.arrayBuffer()).then((b) => new Promise((ok, ko) => ac.decodeAudioData(b, ok, ko))).catch(() => null) : null)));
+      const NIV = [.85, .8, .9];
+      son = { ac, maitre, i: -1, voix: null, bascule(i) {
+        if (i === this.i) return; this.i = i;
+        const t = ac.currentTime, v = this.voix;
+        if (v) { v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value, t); v.g.gain.linearRampToValueAtTime(0, t + 2.5); v.n.stop(t + 2.6); }
+        this.voix = null; if (!tampons[i]) return;
+        const n = ac.createBufferSource(), g = ac.createGain(); n.buffer = tampons[i]; n.loop = true;
+        n.connect(g).connect(maitre); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(NIV[i], t + (v ? 2.5 : 1.5)); n.start(t);
+        this.voix = { n, g };
+      } };
+    } catch (_) { son = null; }
+  }
+  let verrou = null; try { verrou = await navigator.wakeLock?.request("screen"); } catch (_) {}
+  pistes.forEach((a) => fonduVol(a, 0, .5)); enCours = -1;
+  enFilm = true; lenis?.stop(); moteur.preparer();
+
+  const morceaux = [], rec = new MediaRecorder(flux, { mimeType: mime, videoBitsPerSecond: 6e6 });
+  rec.ondataavailable = (e) => e.data.size && morceaux.push(e.data);
+  const fini = new Promise((ok) => (rec.onstop = ok));
+  rec.start(250); son?.bascule(0);
+  etatF.textContent = `Enregistrement de la visite (${enMinutes(DUREE_FILM)}). Garde l'écran allumé jusqu'à la fin.`;
+  const debut = performance.now();
+  let s = 0, tf = 0, prec = debut;
+  await new Promise((ok) => {
+    (function image() {
+      const now = performance.now(), dt = Math.min(.25, (now - prec) / 1000); prec = now;
+      if (s < S_FILM) { s = Math.min(S_FILM, avancer(s, dt)); son?.bascule(pisteDe(s)); }
+      else { if (!tf && son) { const t = ac.currentTime; son.maitre.gain.setValueAtTime(1, t); son.maitre.gain.linearRampToValueAtTime(0, t + FIN_FILM); } tf += dt; }
+      imageFilm(x, s, tf, (now - debut) / 1000);
+      barre.style.width = `${clamp((now - debut) / 1000 / DUREE_FILM) * 100}%`;
+      if (tf < FIN_FILM && !annule) requestAnimationFrame(image); else ok();
+    })();
+  });
+  rec.stop(); await fini;
+  ac?.close();
+  try { verrou?.release(); } catch (_) {}
+  moteur.rendre(); enFilm = false; lenis?.start();
+  if (annule) return;
+
+  const type = mime.split(";")[0], ext = type === "video/mp4" ? "mp4" : "webm";
+  const blob = new Blob(morceaux, { type });
+  fichierFilm = new File([blob], `visite-madame-maman-${C.age}-ans.${ext}`, { type });
+  vid.src = URL.createObjectURL(blob); vid.hidden = false; cv.hidden = true;
+  // prêt : téléchargement ou partage lancés d'eux-mêmes, avec un bouton pour recommencer
+  const bouton = $("#film-enregistrer"), duree = enMinutes(DUREE_FILM);
+  bouton.hidden = false; bouton.classList.remove("pulse");
+  bouton.textContent = partageFilm ? "Partager sur WhatsApp" : "Télécharger à nouveau";
+  etatF.textContent = partageFilm ? `Ton film est prêt (${duree}). Choisis WhatsApp puis « Mon statut ».` : `Ton film est prêt (${duree}). Téléchargement en cours…`;
+  const r = await enregistrer();
+  if (r === "telecharge") { bouton.textContent = "Télécharger à nouveau"; etatF.textContent = `Ton film est téléchargé (${duree}) : retrouve-le dans tes Téléchargements, ou dans Fichiers sur iPhone.`; }
+  else if (r === "refuse") { bouton.classList.add("pulse"); etatF.textContent = `Ton film est prêt (${duree}). Touche « Partager sur WhatsApp », choisis WhatsApp puis « Mon statut ».`; }
+}
+async function enregistrer() {
+  if (!fichierFilm) return;
+  if (partageFilm && navigator.canShare?.({ files: [fichierFilm] })) {
+    try { await navigator.share({ files: [fichierFilm], title: C.nomMusee }); return "partage"; }
+    catch (e) { return e.name === "AbortError" ? "annule" : "refuse"; }
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(fichierFilm); a.download = fichierFilm.name;
+  document.body.append(a); a.click(); a.remove();
+  return "telecharge";
+}
+$("#faire-film").onclick = () => filmer(false);
+$("#partager-film").onclick = () => filmer(true);
+$("#film-enregistrer").onclick = () => { $("#film-enregistrer").classList.remove("pulse"); enregistrer(); };
+$("#film-fermer").onclick = () => { annule = true; $("#film").hidden = true; $("#film-video").pause(); };
+window.__film = {
+  DUREE_FILM, S_FILM,
+  apercu(s, tf = 0) { const [c, x] = toile2d(W, H); moteur.preparer(); imageFilm(x, s, tf, 0); moteur.rendre(); return c.toDataURL("image/jpeg", .75); }
+};
+</script>

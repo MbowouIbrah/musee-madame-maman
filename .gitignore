@@ -1,0 +1,8 @@
+# notes de travail et sources privées
+PASSATION.md
+archive/
+WhatsApp*
+# sorties générées
+site/
+.vercel/
+node_modules/
