@@ -153,6 +153,22 @@ Jugement de la v2 : « style jeu vidéo » (le bloom, les particules, les murs s
   - finale : Haendel, Hallelujah (National Chorus of Korea, CC BY 3.0, Wikimedia).
 - **Vérification** : Playwright 390×844, 0 erreur, luminance des stations entre 129 et 158, choix du pagne et 14 images du film contrôlés. Publié en version 6.
 
+## Révision v17 : ruban 3D, finale enchaînée, film identique (28/10)
+- **Besoin** : le ruban d'inauguration existe dans le musée (plus d'écran 2D) ; fin sans confusion (lettre → rideaux → nuit 3-2-1 → feux → rideaux → options) ; feux lisibles, sonores, derrière le bâtiment ; film = séquence complète.
+- **Existant** : parcours par clés (`keys`, `progres`, `avancer`), arrêt bloquant déjà utilisé pour le pagne (`auto.attente`) ; rideaux `#s-cinema.ouvert` ; nuit `nuitDeFete` / `poseNuit` / `feux` ; film `imageFilm` / `filmer`.
+- **Ruban, options** :
+
+| Option | Pour | Contre |
+|---|---|---|
+| Ruban maillé déformé par sommets (tendu → pendant), pose fonction d'un seul paramètre `k` | déterministe, rejouable dans le film à l'identique, ~80 sommets | un peu de calcul par image |
+| Physique (corde simulée) | réaliste | non déterministe, film différent, coût |
+| Overlay 2D actuel | déjà fait | ne fait pas partie du monde, refusé |
+
+- **Choix** : ruban maillé, ancré aux colonnes x ±1.9, z 1.7, y 1.45 (hauteur de coupe, plein cadre depuis la station « porte ») ; arrêt de la visite (guidée et défilement) à `kPorte.a`, la porte ne s'ouvre qu'après ; coupe par glisser à travers le ruban, toucher du ruban ou bouton ; les deux pans tombent le long des colonnes, le nœud tombe au sol. « Revoir » remet le ruban (séquence identique).
+- **Fin** : rideaux fermés sur la lettre, rouverts sur la nuit avec 3-2-1 pendant la préparation ; feux clippés au-dessus du toit ; texte en Hanken Grotesk 800 échantillonné plus finement ; sons de feux en fichiers libres (licence Pixabay) au lieu de la synthèse.
+- **Film** : rejoue `rendu` avec le ruban coupé à temps fixe, puis lettre, rideaux, nuit et feux composités sur le canvas du film ; durée et aide mises à jour.
+- **Risques** : charge GPU des feux dans l'export ; poids des sons ajoutés ; iOS (volume en lecture seule).
+
 ## Points à trancher (utilisateur)
 1. Les photos (une dizaine) et leurs légendes, salle par salle.
 2. Les couleurs officielles du pagne Ngouon 2026 (photo ou nom des coloris) pour remplacer les 3 coloris provisoires.

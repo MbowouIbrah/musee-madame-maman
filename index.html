@@ -267,31 +267,21 @@ body.auto .visite-auto, body.auto .calque.hb .indice { visibility: hidden; }
 }
 #charge.fin { opacity: 0; visibility: hidden; }
 #charge p { margin: 0; font-family: var(--display); font-style: italic; font-size: 20px; color: var(--or-clair); max-width: 26ch; }
-/* inauguration : le ruban à couper avant d'entrer */
+/* inauguration : le ruban du portique, à couper avant d'entrer */
 #ruban {
-  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
-  padding: 0 var(--gy) 0 var(--gx); text-align: center; touch-action: none; cursor: crosshair;
-  background: radial-gradient(ellipse at 50% 45%, rgba(7, 8, 13, .15), rgba(7, 8, 13, .72) 75%);
-  transition: opacity 1.2s ease;
+  position: fixed; left: 0; right: 0; bottom: max(28px, env(safe-area-inset-bottom)); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 0 16px; text-align: center; pointer-events: none; transition: opacity .8s ease;
 }
-#ruban.parti { opacity: 0; pointer-events: none; }
-#ruban .sur { margin: 0; font: 500 12px/1 var(--texte); letter-spacing: .32em; text-transform: uppercase; color: var(--or-clair); }
-#ruban h2 { margin: 0; font: italic 500 clamp(28px, 6vw, 46px)/1.1 var(--display); color: var(--ivoire); text-shadow: 0 2px 18px rgba(0, 0, 0, .6); }
-.bande { position: relative; width: 100vw; height: 46px; margin: 26px 0; }
-.bande .moitie {
-  position: absolute; top: 0; height: 100%; width: 50%;
-  background: linear-gradient(180deg, #d9b56a 0 3px, #7d0f22 3px, #b3223a 38%, #e0566a 50%, #b3223a 62%, #6e0c1d calc(100% - 3px), #d9b56a calc(100% - 3px));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);
-}
-.bande .g { left: 0; transform-origin: 0 50%; }
-.bande .d { right: 0; transform-origin: 100% 50%; }
-.bande .noeud { position: absolute; left: 50%; top: 50%; width: 130px; height: 120px; transform: translate(-50%, -38%); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .45)); pointer-events: none; }
+#ruban.parti { opacity: 0; }
+body.ruban #calques, body.ruban #suivant { opacity: 0; pointer-events: none; transition: opacity .5s; }
+#ruban .sur { margin: 0; font: 500 12px/1 var(--texte); letter-spacing: .32em; text-transform: uppercase; color: var(--or-clair); text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
 #couper {
+  pointer-events: auto;
   font: 600 15px/1 var(--texte); letter-spacing: .06em; color: var(--encre); background: linear-gradient(180deg, var(--or-clair), var(--or)); border: 0; border-radius: 999px;
   padding: 15px 26px; min-height: 48px; cursor: pointer; box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
 }
 #couper:focus-visible { outline: 2px solid var(--ivoire); outline-offset: 3px; }
-#ruban .aide { margin: 0; font-size: 14px; color: var(--ivoire); opacity: .8; max-width: 32ch; }
+#ruban .aide { margin: 0; font-size: 14px; color: var(--ivoire); max-width: 32ch; text-shadow: 0 1px 8px rgba(0, 0, 0, .8); }
 .paillette { position: fixed; z-index: 61; width: 7px; height: 11px; border-radius: 1px; pointer-events: none; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -381,17 +371,8 @@ body.auto .visite-auto, body.auto .calque.hb .indice { visibility: hidden; }
 <div id="charge"><p id="charge-txt">Le musée ouvre ses portes…</p><div class="barre"><i id="charge-barre"></i></div></div>
 <div id="ruban" hidden>
   <p class="sur">Inauguration</p>
-  <h2>Le Musée Madame Maman</h2>
-  <div class="bande"><span class="moitie g"></span><span class="moitie d"></span>
-    <svg class="noeud" viewBox="0 0 130 120" aria-hidden="true">
-      <defs><linearGradient id="satin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0566a"/><stop offset=".5" stop-color="#b3223a"/><stop offset="1" stop-color="#6e0c1d"/></linearGradient></defs>
-      <path d="M58 46 L34 112 L46 104 L52 116 L62 52Z M72 46 L96 112 L84 104 L78 116 L68 52Z" fill="#8f1428"/>
-      <path d="M62 44 C40 10 4 14 8 40 C11 62 44 56 62 48Z M68 44 C90 10 126 14 122 40 C119 62 86 56 68 48Z" fill="url(#satin)" stroke="#d9b56a" stroke-width="2"/>
-      <rect x="55" y="36" width="20" height="20" rx="6" fill="#9e1b2f" stroke="#d9b56a" stroke-width="2"/>
-    </svg>
-  </div>
   <button id="couper" type="button">✂ Couper le ruban</button>
-  <p class="aide">Glisse le doigt à travers le ruban pour ouvrir le musée.</p>
+  <p class="aide">ou glisse le doigt à travers le ruban rouge</p>
 </div>
 
 <script>
@@ -600,49 +581,6 @@ function attendreGeste() {
   ecouteGeste = true;
   const go = (e) => { GESTES.forEach((g) => removeEventListener(g, go, true)); ecouteGeste = false; jouer(e); };
   GESTES.forEach((g) => addEventListener(g, go, { passive: true, capture: true }));
-}
-/* inauguration : on coupe le ruban (glisser à travers, toucher, ou bouton), puis le musée s'ouvre */
-function couperRuban() {
-  const r = $("#ruban"), bande = r.querySelector(".bande");
-  r.hidden = false;
-  if (!reduit) gsap.from(r.querySelectorAll(".sur, h2, .bande, #couper, .aide"), { y: 18, opacity: 0, duration: 1, ease: "expo.out", stagger: .1 });
-  return new Promise((fini) => {
-    let coupe = false, dep = null;
-    const couper = (x) => {
-      if (coupe) return; coupe = true;
-      const b = bande.getBoundingClientRect(), y = b.top + b.height / 2;
-      x = clamp(x ?? innerWidth / 2, innerWidth * .2, innerWidth * .8);
-      r.querySelector(".g").style.width = x + "px"; r.querySelector(".d").style.width = innerWidth - x + "px";
-      const t = reduit ? .01 : 1;
-      gsap.to(r.querySelector(".g"), { rotation: 62, y: 40, duration: 1.6 * t, ease: "power2.in" });
-      gsap.to(r.querySelector(".d"), { rotation: -62, y: 40, duration: 1.6 * t, ease: "power2.in" });
-      gsap.to(r.querySelector(".noeud"), { y: innerHeight, rotation: 25, opacity: 0, duration: 1.3 * t, ease: "power2.in" });
-      gsap.to(r.querySelectorAll(".sur, h2, #couper, .aide"), { opacity: 0, duration: .5 });
-      if (!reduit) for (let i = 0; i < 40; i++) {
-        const p = document.createElement("i"); p.className = "paillette";
-        p.style.cssText = `left:${x}px;top:${y}px;background:${["#ecd49b", "#c7a25a", "#f2ebdc", "#e0566a"][i % 4]}`;
-        document.body.append(p);
-        const a = Math.random() * Math.PI * 2, v = 80 + Math.random() * 220;
-        gsap.to(p, { x: Math.cos(a) * v, y: Math.sin(a) * v - 60, rotation: Math.random() * 720, duration: 1.1, ease: "power2.out" });
-        gsap.to(p, { y: `+=${innerHeight * .6}`, opacity: 0, duration: 1.6, delay: 1, ease: "power1.in", onComplete: () => p.remove() });
-      }
-      setTimeout(() => { r.classList.add("parti"); fini(); setTimeout(() => { r.hidden = true; }, 1300); }, reduit ? 300 : 1500);
-    };
-    // glisser à travers le ruban : on coupe là où le doigt franchit la bande
-    r.addEventListener("pointerdown", (e) => { dep = e.clientY; });
-    r.addEventListener("pointermove", (e) => {
-      if (dep == null) return;
-      const b = bande.getBoundingClientRect(), m = b.top + b.height / 2;
-      if ((dep - m) * (e.clientY - m) <= 0 && Math.abs(e.clientY - dep) > 8) couper(e.clientX);
-    });
-    r.addEventListener("pointerup", (e) => {
-      const b = bande.getBoundingClientRect();
-      if (e.target.id !== "couper" && e.clientY > b.top - 24 && e.clientY < b.bottom + 24) couper(e.clientX);
-      dep = null;
-    });
-    r.addEventListener("wheel", (e) => e.preventDefault(), { passive: false });
-    $("#couper").onclick = () => couper();
-  });
 }
 function musiqueAuto() { arme = true; ambiance(posteMusique); attendreGeste(); }
 $("#son").onclick = () => {
@@ -1049,6 +987,70 @@ async function demarrer() {
     add(new THREE.Mesh(new THREE.PlaneGeometry(.95, 3.09), matBanniere), x, 3.95, 1.7);
     add(new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, 1.12, 12), or), x, 5.52, 1.7).rotation.z = Math.PI / 2;
   });
+  // ruban d'inauguration noué aux deux colonnes centrales ; sa pose ne dépend que de k (0 tendu, 1 tombé)
+  const RUBAN = { x: 1.61, y: 1.45, z: 1.7, w: .085 };
+  const satin = new THREE.MeshPhysicalMaterial({ color: 0x8c0d1e, roughness: .42, metalness: 0, sheen: 1, sheenColor: 0xff5a6e, sheenRoughness: .32, clearcoat: .12, clearcoatRoughness: .45, side: THREE.DoubleSide });
+  // bande de satin plate : f(u, v, out) place chaque sommet (u le long, v en travers de -.5 à .5)
+  function bande(seg, f, cols = 3) {
+    const g = new THREE.PlaneGeometry(1, 1, cols - 1, seg), pos = g.attributes.position, p = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) { f(Math.floor(i / cols) / seg, (i % cols) / (cols - 1) - .5, p); pos.setXYZ(i, p.x, p.y, p.z); }
+    g.computeVertexNormals(); return new THREE.Mesh(g, satin);
+  }
+  const pans = [-1, 1].map((c) => {
+    // tour de ruban serré autour de la colonne
+    add(bande(48, (u, v, o) => o.set(.305 * Math.cos(u * Math.PI * 2), v * RUBAN.w, .305 * Math.sin(u * Math.PI * 2))), c * 1.9, RUBAN.y, RUBAN.z);
+    const m = add(new THREE.Mesh(new THREE.PlaneGeometry(1, RUBAN.w, 60, 1), satin)); m.frustumCulled = false; m.userData.c = c; return m;
+  });
+  // nœud : deux boucles pincées, un tour central, deux pans coupés en queue d'aronde
+  const noeud = add(new THREE.Group(), 0, RUBAN.y, RUBAN.z + .02); noeud.scale.setScalar(1.35);
+  [-1, 1].forEach((c) => {
+    add(bande(40, (u, v, o) => {
+      const a = u * Math.PI * 2, s = (1 - Math.cos(a)) / 2, w = RUBAN.w * (.45 + .55 * s);
+      o.set(c * .15 * s, .055 * Math.sin(a) + .05 * s, .025 * s);
+      o.x += -c * .2 * v * w; o.y += .25 * v * w; o.z += .95 * v * w;
+    }), 0, 0, 0, noeud);
+    add(bande(30, (u, v, o) => {
+      const w = RUBAN.w * (1 + .2 * u), tw = .35 * Math.sin(u * 4 + c);
+      o.set(c * (.015 + .075 * u + .012 * Math.sin(u * 5)), -.02 - .27 * u, .012 + .02 * Math.sin(u * Math.PI));
+      o.x += .96 * v * w * Math.cos(tw); o.y += c * .3 * v * w; o.z += v * w * Math.sin(tw);
+      o.y += .045 * (1 - 2 * Math.abs(v)) * clamp((u - .9) / .1);
+    }), 0, 0, -.004, noeud);
+  });
+  add(bande(24, (u, v, o) => o.set(v * .05, .032 * Math.sin(u * Math.PI * 2), .028 * Math.cos(u * Math.PI * 2))), 0, .005, .012, noeud);
+  const ruban = { coupe: false, attend: false, t0: 0, k: 0, kPose: -1 };
+  const tendu = new THREE.Vector3(), pendu = new THREE.Vector3(), lrg = new THREE.Vector3(), AXE_X = v3(1, 0, 0), AXE_Z = v3(0, 0, 1);
+  // point du pan c à l'abscisse u (0 : colonne, 1 : coupe), tendu ou tombé le long de la colonne puis posé au sol
+  function pointPan(c, u, k, t, out) {
+    const L = RUBAN.x, x = c * (RUBAN.x - u * L);
+    if (k <= 0) return out.set(x, RUBAN.y - .06 * (1 - (x / RUBAN.x) ** 2) + .008 * Math.sin(t * 2 + u * 9), RUBAN.z);
+    const d = u * L, h = RUBAN.y - .015;
+    if (d < h) return out.set(c * (RUBAN.x - .17 * Math.min(1, d / .3)), RUBAN.y - d, RUBAN.z + .05 * Math.min(1, d / .3));
+    return out.set(c * (RUBAN.x - .17 - (d - h)), .015, RUBAN.z + .05 + (d - h) * .4);
+  }
+  function poseRuban(k, t) {
+    if (k === ruban.kPose && k >= 1) return;
+    ruban.kPose = k;
+    pans.forEach((m) => {
+      const c = m.userData.c, pos = m.geometry.attributes.position, n = pos.count / 2;
+      for (let i = 0; i < n; i++) {
+        const u = c < 0 ? i / (n - 1) : 1 - i / (n - 1), f = lisse(clamp(k * 1.5 - (1 - u) * .5));
+        pointPan(c, u, 0, t, tendu); pointPan(c, u, 1, t, pendu);
+        // largeur : verticale tendu, horizontale le long de la colonne, à plat au sol
+        if (f < .5) { const a = .3 * Math.sin(u * 7 + c * 2 + t * .7); lrg.set(0, Math.cos(a), Math.sin(a)); }
+        else lrg.copy(pendu.y < .03 ? AXE_Z : AXE_X);
+        const p = tendu.lerp(pendu, f);
+        p.z += Math.sin(Math.PI * f) * .3 * u;
+        pos.setXYZ(i, p.x + lrg.x * RUBAN.w / 2, p.y + lrg.y * RUBAN.w / 2, p.z + lrg.z * RUBAN.w / 2);
+        pos.setXYZ(i + n, p.x - lrg.x * RUBAN.w / 2, p.y - lrg.y * RUBAN.w / 2, p.z - lrg.z * RUBAN.w / 2);
+      }
+      pos.needsUpdate = true; m.geometry.computeVertexNormals();
+    });
+    // le nœud tombe au sol en basculant
+    const fn = clamp(k * 1.4), ch = fn * fn;
+    noeud.position.set(-.05 * fn, RUBAN.y + (.06 - RUBAN.y) * ch, RUBAN.z + .03 + .35 * fn);
+    noeud.rotation.set(-Math.PI / 2 * ch, 0, .6 * fn);
+  }
+  poseRuban(0, 0);
   // portes en laque ivoire, poignées dorées
   const vantaux = [];
   {
@@ -1259,6 +1261,7 @@ async function demarrer() {
     }
     const dehors = clamp((cam.position.z + .5) / 2.5);
     soleil.intensity = 2 * dehors; ciel.intensity = .9 + .5 * dehors;
+    poseRuban(ruban.k, t);
     const ouv = 1.75 * lisse(clamp((s - kPorte.a - .1) / 1));
     vantaux[0].rotation.y = ouv; vantaux[1].rotation.y = -ouv;
     lift = lisse(clamp((s - kFinal.a - 1.5) / 1.3)); rev = clamp((s - kFinal.a - 2.5) / .7);
@@ -1665,13 +1668,53 @@ async function demarrer() {
   }
   const choixVisite = surChoix;
   surChoix = (i) => { choixVisite?.(i); if (auto.on && auto.attente) setTimeout(() => { auto.attente = false; }, 1800); };
-  addEventListener("wheel", () => auto.on && guide(false), { passive: true });
-  addEventListener("touchmove", (e) => { if (auto.on && appui && Math.abs(e.touches[0].clientY - appui.y) > 12) guide(false); }, { passive: true });
-  addEventListener("keydown", (e) => { if (auto.on && ["ArrowDown", "ArrowUp", "PageDown", "PageUp", " "].includes(e.key)) guide(false); });
+  addEventListener("wheel", () => auto.on && !ruban.attend && guide(false), { passive: true });
+  addEventListener("touchmove", (e) => { if (auto.on && !ruban.attend && appui && Math.abs(e.touches[0].clientY - appui.y) > 12) guide(false); }, { passive: true });
+  addEventListener("keydown", (e) => { if (auto.on && !ruban.attend && ["ArrowDown", "ArrowUp", "PageDown", "PageUp", " "].includes(e.key)) guide(false); });
+
+  /* inauguration : la visite s'arrête devant le ruban ; glisser à travers, le toucher ou le bouton le coupe */
+  const S_RUBAN = kPorte.a, ecranRuban = () => v3(0, RUBAN.y, RUBAN.z).project(cam);
+  let glisse = null;
+  function arretRuban() {
+    if (!auto.on && lenis && !lenis.isStopped) { lenis.scrollTo(S_RUBAN / T * etendue(), { immediate: true, force: true }); lenis.stop(); }
+    if (ruban.attend) return;
+    ruban.attend = true; document.body.classList.add("ruban"); auto.attente = auto.on;
+    const r = $("#ruban"); r.classList.remove("parti"); r.hidden = false;
+    if (!reduit) gsap.from(r.children, { y: 14, opacity: 0, duration: .9, ease: "expo.out", stagger: .08 });
+  }
+  function couperRuban(x) {
+    if (!ruban.attend || ruban.coupe) return;
+    ruban.coupe = true; ruban.t0 = performance.now();
+    const p = ecranRuban(), y = (1 - p.y) / 2 * innerHeight;
+    x = clamp(x ?? innerWidth / 2, innerWidth * .2, innerWidth * .8);
+    $("#ruban").classList.add("parti");
+    if (!reduit) for (let i = 0; i < 40; i++) {
+      const e = document.createElement("i"); e.className = "paillette";
+      e.style.cssText = `left:${x}px;top:${y}px;background:${["#ecd49b", "#c7a25a", "#f2ebdc", "#e0566a"][i % 4]}`;
+      document.body.append(e);
+      const a = Math.random() * Math.PI * 2, v = 80 + Math.random() * 220;
+      gsap.to(e, { x: Math.cos(a) * v, y: Math.sin(a) * v - 60, rotation: Math.random() * 720, duration: 1.1, ease: "power2.out" });
+      gsap.to(e, { y: `+=${innerHeight * .6}`, opacity: 0, duration: 1.6, delay: 1, ease: "power1.in", onComplete: () => e.remove() });
+    }
+    // les pans tombent, puis la porte s'ouvre et la visite reprend
+    setTimeout(() => {
+      ruban.attend = false; document.body.classList.remove("ruban"); $("#ruban").hidden = true;
+      if (auto.on) auto.attente = false; else lenis?.start();
+    }, reduit ? 300 : 1800);
+  }
+  function remettreRuban() { ruban.coupe = ruban.attend = false; ruban.k = 0; $("#ruban").hidden = true; document.body.classList.remove("ruban"); }
+  $("#couper").onclick = () => couperRuban();
+  addEventListener("pointerdown", (e) => { glisse = ruban.attend ? e.clientY : null; }, { passive: true });
+  addEventListener("pointermove", (e) => {
+    if (glisse == null || !ruban.attend) return;
+    const m = (1 - ecranRuban().y) / 2 * innerHeight;
+    if ((glisse - m) * (e.clientY - m) <= 0 && Math.abs(e.clientY - glisse) > 8) { glisse = null; couperRuban(e.clientX); }
+  }, { passive: true });
+  addEventListener("pointerup", () => { glisse = null; }, { passive: true });
   $("#visite-auto").onclick = lancerVisite;
   const rejouer = async (guidee) => {
     $("#voile-noir").classList.add("on"); await attendre(600);
-    restaurerJour();
+    restaurerJour(); remettreRuban();
     $("#s-cinema").classList.add("ouvert");
     if (guidee) lancerVisite(); else aller(0, { immediate: true, force: true });
     await attendre(900); $("#voile-noir").classList.remove("on");
@@ -1692,6 +1735,11 @@ async function demarrer() {
     }
     if (!appui) return;
     const a = appui; appui = null;
+    if (ruban.attend && !a.cible.closest?.("button")) {
+      ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); rc.setFromCamera(ndc, cam);
+      if (rc.intersectObjects([...pans, noeud], true).length || Math.abs(e.clientY - (1 - ecranRuban().y) / 2 * innerHeight) < 40) couperRuban(e.clientX);
+      return;
+    }
     if (Math.hypot(e.clientX - a.x, e.clientY - a.y) > 8 || a.cible.closest?.("button, a, .fiche, .lettre, .film, #s-lettre, #s-cinema")) return;
     if (auto.on && !auto.attente) { pauser(!auto.pause); return; }
     if (position() > etendue() + innerHeight * .2 || enFilm || $("#fiche").classList.contains("on")) return;
@@ -1715,7 +1763,10 @@ async function demarrer() {
     if (enFilm) return;
     const now = performance.now(), t = (now - t0) / 1000, dt = Math.min(.1, (now - tPrec) / 1000); tPrec = now;
     if (auto.on) visite(dt);
-    const s = auto.on ? auto.s : etat.p * T, y = position();
+    let s = auto.on ? auto.s : etat.p * T;
+    const y = position();
+    if (!ruban.coupe && s > S_RUBAN && !nuit.on && y < etendue()) { s = S_RUBAN; if (auto.on) auto.s = s; arretRuban(); }
+    ruban.k = ruban.coupe ? (reduit ? 1 : clamp((now - ruban.t0) / 1700)) : 0;
     if (nuit.on) { rendu(T, t, false); poseNuit(t); renderer.render(scene, cam); }
     else if (y < etendue() + innerHeight * 1.6) { rendu(s, t, !reduit); renderer.render(scene, cam); }
     calques(s, clamp((y - etendue()) / (innerHeight * .35)));
@@ -1737,7 +1788,7 @@ async function demarrer() {
     image(s, t) { rendu(s, t, false); renderer.render(scene, cam); return renderer.domElement; },
     rendre() { dimensionner(true); }
   };
-  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat };
+  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat, ruban: () => ({ ...ruban }) };
 
   barreCharge.style.width = "100%";
   rendu(0, 0, false); renderer.render(scene, cam);
@@ -1747,7 +1798,6 @@ async function demarrer() {
   musiqueAuto();
   // ?feux : accès direct à la finale de nuit (aperçu)
   if (/[?&#]feux/.test(location.search + location.hash)) { nuitDeFete(); return; }
-  await couperRuban();
   if (!reduit) gsap.from(".titre-musee .l", { yPercent: 105, opacity: 0, duration: 1.2, ease: "expo.out", stagger: .045, delay: .35 });
 }
 
