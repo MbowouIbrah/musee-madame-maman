@@ -2,7 +2,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Hanken+Grotesk:wght@400;500;600;800&display=swap">
 <style>
 /* Layout : un canvas WebGL fixe en fond ; le défilement d'un espaceur (#parcours) pilote la caméra ; les textes (calques) se superposent en fondu et en parallaxe ; la lettre suit en flux normal. */
 :root {
@@ -734,7 +734,7 @@ demarrer().catch((e) => { console.error(e); $("#charge-txt").textContent = "Ton 
 
 async function demarrer() {
   await Promise.race([
-    Promise.all(["500 64px 'Bodoni Moda'", "italic 64px 'Bodoni Moda'", "500 20px 'Hanken Grotesk'", "400 20px 'Hanken Grotesk'"].map((f) => document.fonts.load(f))),
+    Promise.all(["500 64px 'Bodoni Moda'", "italic 64px 'Bodoni Moda'", "500 20px 'Hanken Grotesk'", "400 20px 'Hanken Grotesk'", "800 64px 'Hanken Grotesk'"].map((f) => document.fonts.load(f))),
     attendre(2500)
   ]).catch(() => {});
   const barreCharge = $("#charge-barre"); barreCharge.style.width = "20%";
@@ -1418,7 +1418,7 @@ async function demarrer() {
     taille(); addEventListener("resize", taille);
     const PAL = ["rgb(255,196,92)", "rgb(255,238,205)", "rgb(255,120,170)", "rgb(255,70,70)", "rgb(110,255,150)", "rgb(110,170,255)", "rgb(255,226,160)", "rgb(255,246,226)"];
     const COLS = [0, 0, 1, 2, 3, 4, 5, 6];
-    const N = 17, MAX = 3600, MAXTXT = 1800, p = new Float32Array(MAX * N);
+    const N = 17, MAX = 5200, MAXTXT = 3200, p = new Float32Array(MAX * N);
     const X = 0, Y = 1, VX = 2, VY = 3, AGE = 4, DUR = 5, COL = 6, SZ = 7, K = 8, TX = 9, TY = 10, X0 = 11, Y0 = 12, HOLD = 13, SEED = 14, GR = 15, DRAG = 16;
     const MAINTIEN = 3.4;
     let n = 0, residu = false;
@@ -1522,7 +1522,7 @@ async function demarrer() {
         if (k === 2) {
           const vol = p[o + HOLD], a = age < vol ? Math.min(1, age / vol * 3) : .72 + .28 * Math.sin(age * 9 + p[o + SEED] * 60), r = p[o + SZ];
           ctx.fillStyle = PAL[p[o + COL]];
-          ctx.globalAlpha = a * .2; ctx.beginPath(); ctx.arc(x, y, r * 3, 0, 6.2832); ctx.fill();
+          ctx.globalAlpha = a * .14; ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, 6.2832); ctx.fill();
           ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
         } else {
           const u = age / p[o + DUR];
@@ -1543,20 +1543,21 @@ async function demarrer() {
         for (let i = 1; i < mots.length; i++) { const e = Math.abs(mots.slice(0, i).join(" ").length - mots.slice(i).join(" ").length); if (e < d) { d = e; best = i; } }
         lignes = [mots.slice(0, best).join(" "), mots.slice(best).join(" ")];
       }
-      const police = (fs) => `700 ${fs}px ${SERIF}`;
-      x.font = police(100);
+      // police grasse sans déliés : chaque trait reste assez épais pour recevoir des étincelles
+      const police = (fs) => `800 ${fs}px ${SANS}`;
+      x.font = police(100); x.letterSpacing = "6px";
       const w100 = Math.max(...lignes.map((l) => x.measureText(l).width));
       const fs = Math.min(W * .88 / w100 * 100, Math.min(H * .2, W * (portrait() ? .26 : .16)) * gros, H * .36 / (1.15 * lignes.length));
       const cw = Math.ceil(W), lh = fs * 1.15, ch = Math.ceil(lh * lignes.length + fs * .3);
       c.width = cw; c.height = ch;
-      x.font = police(fs); x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff";
+      x.font = police(fs); x.letterSpacing = `${Math.round(fs * .07)}px`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff";
       lignes.forEach((l, i) => x.fillText(l, cw / 2, lh * (i + .5) + fs * .1));
       const d = x.getImageData(0, 0, cw, ch).data;
       let encre = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 120) encre++;
-      const pas = Math.max(2, Math.round(Math.sqrt(encre / (reduit ? 700 : 1700)))), pts = [], oy = yTexte() - ch / 2;
-      for (let j = 0; j < ch; j += pas) for (let i = 0; i < cw; i += pas) if (d[(j * cw + i) * 4 + 3] > 120) pts.push([i + (Math.random() - .5) * pas * .6, oy + j + (Math.random() - .5) * pas * .6]);
+      const pas = Math.max(2, Math.round(Math.sqrt(encre / (reduit ? 1200 : 3000)))), pts = [], oy = yTexte() - ch / 2;
+      for (let j = 0; j < ch; j += pas) for (let i = 0; i < cw; i += pas) if (d[(j * cw + i) * 4 + 3] > 120) pts.push([i + (Math.random() - .5) * pas * .3, oy + j + (Math.random() - .5) * pas * .3]);
       while (pts.length > MAXTXT) pts.splice((Math.random() * pts.length) | 0, 1);
-      return { pts, r: clamp(pas * .46, 1.2, 3), c1 };
+      return { pts, r: clamp(pas * .38, 1, 2.4), c1 };
     }
 
     /* déroulé */
