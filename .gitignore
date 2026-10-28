@@ -6,3 +6,6 @@ WhatsApp*
 site/
 .vercel/
 node_modules/
+
+.vercel
+.env*
