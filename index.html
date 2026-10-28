@@ -491,7 +491,9 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 const $ = (s) => document.querySelector(s);
 const C = CONFIG, P = C.pagne;
 const reduit = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+// ?vite=4 dans l'URL : parcours accéléré, pour tester
+const VITE = Math.max(1, parseFloat(new URLSearchParams(location.search).get("vite")) || 1);
+const attendre = (ms) => new Promise((r) => setTimeout(r, ms / VITE));
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const lisse = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1697,16 +1699,16 @@ async function demarrer() {
     // défilement lent jusqu'à ce que la fin de la lettre (signature) soit entièrement à l'écran
     const lettre = $(".lettre"), sign = $(".lettre .sign"), max = lenis ? lenis.limit : document.documentElement.scrollHeight - innerHeight;
     const yFin = Math.min(max, Math.max(yL, position() + lettre.getBoundingClientRect().bottom - innerHeight + 24));
-    const lecture = clamp(lettre.textContent.trim().split(/\s+/).length / 7.8, 6, 27);
-    if (lenis) lenis.scrollTo(yFin, { duration: lecture, easing: (t) => (1 - Math.cos(Math.PI * t)) / 2 });
+    const lecture = clamp(lettre.textContent.trim().split(/\s+/).length / 23.4, 2, 9);
+    if (lenis) lenis.scrollTo(yFin, { duration: lecture / VITE, easing: (t) => t });
     else { await attendre(lecture * 1000 * .5); aller(yFin); }
     await attendre(lecture * 1000 + 600);
-    if (auto.on || Math.abs(position() - yFin) > 40) return;
+    if (auto.on) return;
     const r = sign.getBoundingClientRect();
     if (r.top < 0 || r.bottom > innerHeight) { aller(yFin, { immediate: true }); await attendre(300); }
     // le temps de savourer la signature, puis les rideaux se ferment dessus
     await attendre(3500);
-    if (auto.on || Math.abs(position() - yFin) > 40 || !$("#s-cinema").classList.contains("ouvert")) return;
+    if (auto.on || nuit.on || nuit.etat !== "jour") return;
     await nuitDeFete();
     if (!auto.on && nuit.etat === "fini") fermerRideaux();
   }
@@ -1721,7 +1723,7 @@ async function demarrer() {
     if (auto.pause || auto.attente || $("#fiche").classList.contains("on")) { auto.dt = 0; return; }
     // pas lissé : les à-coups d'images ne se voient plus dans le mouvement
     auto.dt = auto.dt ? auto.dt + (Math.min(dt, .05) - auto.dt) * .2 : Math.min(dt, 1 / 60);
-    auto.s = Math.min(T, avancer(auto.s, auto.dt));
+    auto.s = Math.min(T, avancer(auto.s, auto.dt * VITE));
     // au cadeau, la visite attend qu'elle choisisse son pagne
     if (!auto.final && auto.s >= kFinal.b) { auto.final = true; auto.s = kFinal.b; auto.attente = true; $("#pagne-r").textContent = "Touche le pagne qui te plaît pour continuer."; }
     if (auto.s >= T) { guide(false); versLaFin(); }
@@ -1853,7 +1855,7 @@ async function demarrer() {
     feux: (ac, dest) => feux(() => true, () => toitEcran(H), { W, H, ac, dest }),
     rendre() { restaurerJour(); dimensionner(true); }
   };
-  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat, ruban: () => ({ ...ruban }), lenis: () => lenis };
+  window.__musee = { etat, auto, keys: keys.map((K) => ({ k: K.k, a: K.a, b: K.b, r: K.r, j: K.j })), T, fps: () => fpsMes, musique: () => [posteMusique, enCours, pisteDe(auto.s)], qualite: (v) => { manuel = true; qualite(v); }, nuit: () => nuitDeFete(), nuitEtat: () => nuit.etat, fin: () => versLaFin(), ruban: () => ({ ...ruban }), lenis: () => lenis };
 
   barreCharge.style.width = "100%";
   rendu(0, 0, false); renderer.render(scene, cam);
@@ -1862,6 +1864,7 @@ async function demarrer() {
   for (const a of [musG, musF]) if (a) a.preload = "metadata";   // rien ne se télécharge pendant le chargement : la 3D d’abord, la musique ensuite
   musiqueAuto();
   // ?feux : accès direct à la finale de nuit (aperçu)
+  if (VITE > 1) gsap.globalTimeline.timeScale(VITE);
   if (/[?&#]feux/.test(location.search + location.hash)) { nuitDeFete(); return; }
   if (!reduit) gsap.from(".titre-musee .l", { yPercent: 105, opacity: 0, duration: 1.2, ease: "expo.out", stagger: .045, delay: .35 });
 }
@@ -1962,7 +1965,7 @@ function finFilm(x, l) {
 }
 // le film suit la visite guidée pas à pas : ruban, pagne, lettre, nuit et feux, rideaux (mêmes durées qu'en direct)
 const F = W / 390, FIN_FILM = 5, R_ATTENTE = 1.2, R_COUPE = 1.8, CHOIX = 2.4, L_ARRIVE = 3.5, FERME = 2.8, DECOMPTE = 3.3, RIDEAUX = 1.2 + 2.6 + 1;
-const LECTURE = clamp($(".lettre").textContent.trim().split(/\s+/).length / 7.8, 6, 27), LETTRE = L_ARRIVE + 1.2 + LECTURE + .6 + 3.5;
+const LECTURE = clamp($(".lettre").textContent.trim().split(/\s+/).length / 23.4, 2, 9), LETTRE = L_ARRIVE + 1.2 + LECTURE + .6 + 3.5;
 const DUREE_FILM = duree(T) + R_ATTENTE + R_COUPE + CHOIX + LETTRE + FERME + DECOMPTE + (reduit ? 28.5 : 43.8) + 7.5 + RIDEAUX + FIN_FILM;
 const enMinutes = (d) => `${Math.floor(d / 60)} min ${String(Math.round(d % 60)).padStart(2, "0")}`;
 const nouveauFilm = () => ({ ph: "visite", s: 0, u: 0, tn: 0, retour: 0, coupe: false, vu: false, feu: null });
@@ -2035,7 +2038,7 @@ function lettreMep(x) {
 function lettre2d(x, u) {
   const M = lettreMep(x), ar = (1 - Math.cos(Math.PI * clamp(u / L_ARRIVE))) / 2;
   const D = Math.max(0, .3 * H + M.h + 24 * F - H), rl = clamp((u - L_ARRIVE - 1.2) / LECTURE);
-  const y0 = H * (1 - ar) - D * (1 - Math.cos(Math.PI * rl)) / 2, cx = 30, cy = y0 + .3 * H;
+  const y0 = H * (1 - ar) - D * rl, cx = 30, cy = y0 + .3 * H;
   x.save();
   const g = x.createLinearGradient(0, y0, 0, y0 + .32 * H); g.addColorStop(0, "rgba(8, 6, 5, 0)"); g.addColorStop(1, "rgba(8, 6, 5, .88)");
   x.fillStyle = g; x.fillRect(0, y0, W, .32 * H); x.fillStyle = "rgba(8, 6, 5, .88)"; x.fillRect(0, y0 + .32 * H, W, Math.max(0, H - y0));
@@ -2107,7 +2110,7 @@ function imageFilm(x, st, t) {
 $("#credits").textContent = C.musique?.credits || "";
 // les rideaux se ferment quand on arrive, puis les options apparaissent
 new IntersectionObserver(([e]) => {
-  $("#s-cinema").classList.toggle("ouvert", !e.isIntersecting);
+  if (!$("#s-cinema").classList.contains("entracte")) $("#s-cinema").classList.toggle("ouvert", !e.isIntersecting);
 }, { threshold: .55 }).observe($("#s-cinema"));
 $("#aide-film").textContent = `Le film de ta visite se prépare en temps réel (environ ${enMinutes(DUREE_FILM)}), puis touche « Partager » et choisis WhatsApp, puis « Mon statut ».`;
 
