@@ -391,8 +391,8 @@ const CONFIG = {
   nomMusee: "Le Musée Madame Maman",
   plaque: "MUSÉE MADAME MAMAN",
   exposition: "Une vie de grâce",
-  dates: "1984 — 2026",
-  age: 42,
+  dates: "Un an de plus",
+  salleSurprise: "Salle IV",
   dateVisite: "28.10.2026",
   lieuDate: "Paris, le 28 octobre 2026",
   annonce: "Le 28 octobre 2026, le Musée Madame Maman présente une exposition exceptionnelle, préparée pour une seule invitée d'honneur.",
@@ -455,7 +455,7 @@ const CONFIG = {
         { type: "photo", photo: "assets/photos/p5.jpg", titre: "Le chemin", date: "2027", technique: "Projet, encre et espérance",
           cartel: "« Le Seigneur gardera tes départs et tes arrivées. » Psaume 121, 8", texte: "La valise est prête, le sourire aussi.\nElle est souvent partie pour les autres. Le prochain voyage, on veut qu'il soit pour elle." },
         { type: "mot", mot: "Du temps pour toi", titre: "Du temps pour toi", date: "À partir d'aujourd'hui", technique: "Repos, rires et douceur",
-          cartel: "Une œuvre que tu mérites depuis longtemps.", texte: "Pour tes 42 ans, pas un objet : du repos, des rires, et des journées où personne n'a besoin de toi, sauf pour te dire merci.\nTu as tant donné. Cette année, reçois." },
+          cartel: "Une œuvre que tu mérites depuis longtemps.", texte: "Pour ce 28 octobre, pas un objet : du repos, des rires, et des journées où personne n'a besoin de toi, sauf pour te dire merci.\nTu as tant donné. Cette année, reçois." },
         { type: "vide", titre: "Les années à venir", date: "En cours", technique: "Œuvre collective, sous le regard de Dieu",
           cartel: "« Je connais les projets que j'ai formés pour vous : un avenir et une espérance. » Jérémie 29, 11", texte: "Le cadre est prêt. Ce qu'on y mettra, on l'écrira ensemble, jour après jour." }
       ]
@@ -481,7 +481,7 @@ const CONFIG = {
     ref: "Psaume 46, 6"
   },
   lettreTitre: "Joyeux anniversaire, Maman",
-  lettre: "Maman,\n\nJ'ai voulu te construire un musée, parce que je ne savais pas comment te dire tout ça autrement.\n\nToute ma vie, je t'ai vue faire deux choses à la fois : être douce et être forte. Tu nous prenais dans tes bras le soir, et le lendemain tu tenais tête au monde entier pour nous. Je n'ai pas toujours compris tes « non », tes exigences, ta voix ferme. Aujourd'hui je sais : c'était de l'amour qui voyait plus loin que moi.\n\nTu as toujours été là. Dans les jours faciles, et dans ceux où tout était lourd, sans jamais laisser ce poids tomber sur nous. Si je sais prier, aimer et me relever, c'est parce que je t'ai regardée faire.\n\nPour tes 42 ans, je te souhaite de recevoir enfin un peu de tout ce que tu as donné.\n\n« Que le Seigneur te bénisse et te garde ! Qu'il fasse briller sur toi son visage et t'accorde sa grâce ! Qu'il te découvre sa face et te donne la paix ! »\nNombres 6, 24-26\n\nJoyeux anniversaire. Je t'aime."
+  lettre: "Maman,\n\nJ'ai voulu te construire un musée, parce que je ne savais pas comment te dire tout ça autrement.\n\nToute ma vie, je t'ai vue faire deux choses à la fois : être douce et être forte. Tu nous prenais dans tes bras le soir, et le lendemain tu tenais tête au monde entier pour nous. Je n'ai pas toujours compris tes « non », tes exigences, ta voix ferme. Aujourd'hui je sais : c'était de l'amour qui voyait plus loin que moi.\n\nTu as toujours été là. Dans les jours faciles, et dans ceux où tout était lourd, sans jamais laisser ce poids tomber sur nous. Si je sais prier, aimer et me relever, c'est parce que je t'ai regardée faire.\n\nPour cette année de plus, je te souhaite de recevoir enfin un peu de tout ce que tu as donné.\n\n« Que le Seigneur te bénisse et te garde ! Qu'il fasse briller sur toi son visage et t'accorde sa grâce ! Qu'il te découvre sa face et te donne la paix ! »\nNombres 6, 24-26\n\nJoyeux anniversaire. Je t'aime."
 };
 </script>
 
@@ -679,7 +679,7 @@ function calque(K) {
   } else if (K.k === "final") {
     d.classList.add("hb");
     const btns = P.choix.map((p, i) => `<button class="pagne" data-i="${i}" aria-pressed="${choix === i}"><span class="nuancier">${p.couleurs.map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(p.nom)}</button>`).join("");
-    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">Salle ${C.age}</span><span class="titre-salle">La surprise</span></div>
+    d.innerHTML = `<div class="bloc" data-z="1"><span class="sur">${C.salleSurprise}</span><span class="titre-salle">La surprise</span></div>
       <div class="final-grille"><div class="bloc avant"><span class="sur">Un dernier secret</span><h2 class="grand suspense">Es-tu prête à découvrir le cadeau que j'ai prévu pour toi<span class="pts"><i>.</i><i>.</i><i>.</i></span> ?</h2><span class="indice pulse">Continue de défiler, tout doucement…</span></div>
       <div class="bloc apres" data-z="1"><p class="pagne-q">${esc(P.question)}</p><div class="pagnes">${btns}</div>
       <p class="pagne-r" id="pagne-r" aria-live="polite">${choix === null ? "Touche un pagne pour le choisir." : `Ton choix : ${esc(P.choix[choix].nom)}. Il sera prêt pour le Ngouon 2026.`}</p>
@@ -950,7 +950,7 @@ async function demarrer() {
     const dos = add(new THREE.Mesh(new THREE.ShapeGeometry(forme, 24), matMur[k]), 0, 0, z - .3); dos.rotation.y = Math.PI;
     add(new THREE.Mesh(extruder(arcBand(demi, demi + .16, 2.2), .36, .015), blanc), 0, 0, z - .33);
     add(new THREE.Mesh(extruder(arcBand(demi + .16, demi + .21, 2.2), .4, .008), or), 0, 0, z - .35);
-    if (k) add(new THREE.Mesh(new THREE.PlaneGeometry(1.5, .375), metal(texEtiquette((C.salles[k]?.num ?? "Salle " + C.age).toUpperCase()))), 0, 3.95, z + .02);
+    if (k) add(new THREE.Mesh(new THREE.PlaneGeometry(1.5, .375), metal(texEtiquette((C.salles[k]?.num ?? C.salleSurprise).toUpperCase()))), 0, 3.95, z + .02);
   }
   add(new THREE.Mesh(new THREE.PlaneGeometry(8, 5), matMur[3]), 0, 2.5, -48);
 
@@ -1613,7 +1613,7 @@ async function demarrer() {
     const bouquet = (t0, t1, m, saules) => { for (let i = 0; i < m; i++) a(t0 + (t1 - t0) * i / m + Math.random() * .2, () => tir(rx(), ry(), gerbe(saules && i % 3 === 2 ? "saule" : undefined))); };
     const texte = (t, txt, gros, c1) => a(t, () => tir(W / 2, yTexte(), { type: "pivoine", col: 0, col2: 1, texte: pointsTexte(txt, gros, c1) }, 1.05));
     const cote = (t) => a(t, () => tir(portrait() ? rx() : Math.random() < .5 ? rx(.06, .2) : rx(.8, .94), H * (.12 + Math.random() * .22), gerbe()));
-    const age = `${C.age} ans`;
+    const age = "28 octobre";
     let tFin;
     if (reduit) {
       texte(1, C.surnom); texte(7.5, "Joyeux anniversaire"); texte(14, age, 1.45, 6); texte(20.5, "Que Dieu te bénisse");
@@ -1930,7 +1930,7 @@ function carte2d(x, K, a, s) {
     // la question de suspense cède la place au pagne choisi
     const r = clamp((s - K.a - 2.3) / .6);
     if (r < 1) carte2d(x, { k: "texte", L: [["sur", "Un dernier secret"], ["titre", "Es-tu prête à découvrir le cadeau que j'ai prévu pour toi ?"]] }, a * (1 - r));
-    if (r > 0) carte2d(x, { k: "texte", L: [["sur", `Salle ${C.age} · ${C.pagne.salle}`], ["texte", P.question], ...(choix === null ? [] : [["titre", P.choix[choix].nom], ["sur", "Prêt pour le Ngouon 2026"]])] }, a * r);
+    if (r > 0) carte2d(x, { k: "texte", L: [["sur", `${C.salleSurprise} · ${C.pagne.salle}`], ["texte", P.question], ...(choix === null ? [] : [["titre", P.choix[choix].nom], ["sur", "Prêt pour le Ngouon 2026"]])] }, a * r);
     return;
   }
   const L = K.L ? K.L :K.k === "facade" ? [["sur", C.affiche.sous], ["titre", C.nomMusee], ["texte", C.exposition], ["sur", C.dateVisite]]
@@ -1975,7 +1975,7 @@ function finFilm(x, l) {
   x.save(); x.textAlign = "center"; x.fillStyle = OR_FONCE;
   x.font = `italic 110px ${POL.d}`; lettres(x, "Joyeux", W / 2, 560, l - .7, 110, .06);
   x.font = `italic 82px ${POL.d}`; lettres(x, "anniversaire", W / 2, 670, l - 1.1, 82, .04);
-  x.globalAlpha = eo((l - 2.1) / 1); x.fillStyle = ENCRE; x.font = `500 40px ${POL.d}`; x.fillText(`Pour tes ${C.age} ans`, W / 2, 790);
+  x.globalAlpha = eo((l - 2.1) / 1); x.fillStyle = ENCRE; x.font = `500 40px ${POL.d}`; x.fillText("Ce 28 octobre", W / 2, 790);
   x.globalAlpha = eo((l - 2.7) / 1) * .9; x.fillStyle = "#8a7660"; x.font = `italic 30px ${POL.d}`; x.fillText(C.signature, W / 2, 860);
   x.restore();
 }
@@ -2196,7 +2196,7 @@ async function filmer(partage) {
 
   const type = mime.split(";")[0], ext = type === "video/mp4" ? "mp4" : "webm";
   const blob = new Blob(morceaux, { type });
-  fichierFilm = new File([blob], `visite-madame-maman-${C.age}-ans.${ext}`, { type });
+  fichierFilm = new File([blob], `visite-madame-maman-28-octobre.${ext}`, { type });
   vid.src = URL.createObjectURL(blob); vid.hidden = false; cv.hidden = true;
   // prêt : téléchargement ou partage lancés d'eux-mêmes, avec un bouton pour recommencer
   const bouton = $("#film-enregistrer"), duree = enMinutes(DUREE_FILM);
