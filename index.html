@@ -1613,7 +1613,7 @@ async function demarrer() {
     const bouquet = (t0, t1, m, saules) => { for (let i = 0; i < m; i++) a(t0 + (t1 - t0) * i / m + Math.random() * .2, () => tir(rx(), ry(), gerbe(saules && i % 3 === 2 ? "saule" : undefined))); };
     const texte = (t, txt, gros, c1) => a(t, () => tir(W / 2, yTexte(), { type: "pivoine", col: 0, col2: 1, texte: pointsTexte(txt, gros, c1) }, 1.05));
     const cote = (t) => a(t, () => tir(portrait() ? rx() : Math.random() < .5 ? rx(.06, .2) : rx(.8, .94), H * (.12 + Math.random() * .22), gerbe()));
-    const age = "28 octobre";
+    const age = "1 an de plus";
     let tFin;
     if (reduit) {
       texte(1, C.surnom); texte(7.5, "Joyeux anniversaire"); texte(14, age, 1.45, 6); texte(20.5, "Que Dieu te bénisse");
